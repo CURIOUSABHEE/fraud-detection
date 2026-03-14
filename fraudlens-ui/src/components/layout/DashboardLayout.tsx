@@ -1,10 +1,15 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { Outlet } from "react-router-dom";
-import { Bell, Menu } from "lucide-react";
+import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/AuthContext";
 
 export default function DashboardLayout() {
+  const { user } = useAuth();
+  const firstName = user?.full_name?.split(" ")[0] || user?.username || "there";
+  const initial = firstName[0].toUpperCase();
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -14,7 +19,7 @@ export default function DashboardLayout() {
             <div className="flex items-center gap-3">
               <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
               <span className="text-sm text-muted-foreground hidden sm:block">
-                Good morning, <span className="text-foreground font-medium">Alex</span>
+                Good morning, <span className="text-foreground font-medium">{firstName}</span>
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -23,7 +28,7 @@ export default function DashboardLayout() {
                 <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive" />
               </Button>
               <div className="h-9 w-9 rounded-full gradient-primary flex items-center justify-center text-sm font-semibold text-primary-foreground">
-                A
+                {initial}
               </div>
             </div>
           </header>

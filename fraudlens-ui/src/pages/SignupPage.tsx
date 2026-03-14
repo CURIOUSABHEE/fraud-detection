@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link } from "react-router-dom";
-import { Shield, Eye, EyeOff, ArrowRight, ArrowLeft, Check, User, Lock, FileText } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Shield, ArrowRight, ArrowLeft, Check, User, Lock } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
 
 const stepVariants = {
   enter: (dir: number) => ({ x: dir > 0 ? 200 : -200, opacity: 0 }),
@@ -13,13 +15,42 @@ const stepVariants = {
 };
 
 export default function SignupPage() {
+  const { signup } = useAuth();
+  const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: "", gender: "male", pan: "", username: "", mpin: "", confirmMpin: "" });
 
   const update = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
-  const next = () => { setDir(1); setStep((s) => Math.min(2, s + 1)); };
+
+  const next = () => {
+    if (step === 1) {
+      if (!form.username.trim()) { toast.error("Username is required"); return; }
+      if (form.mpin.length !== 6) { toast.error("MPIN must be 6 digits"); return; }
+      if (form.mpin !== form.confirmMpin) { toast.error("MPINs do not match"); return; }
+    }
+    setDir(1); setStep((s) => Math.min(2, s + 1));
+  };
   const back = () => { setDir(-1); setStep((s) => Math.max(0, s - 1)); };
+
+  const handleCreate = async () => {
+    setLoading(true);
+    try {
+      await signup({
+        username: form.username.trim(),
+        full_name: form.name.trim() || undefined,
+        gender: form.gender as "male" | "female" | "other",
+        pan_card: form.pan.trim() || undefined,
+        mpin: form.mpin,
+      });
+      navigate("/dashboard");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Registration failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const stepIcons = [User, Lock, Check];
 
@@ -164,10 +195,9 @@ export default function SignupPage() {
                   Next <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               ) : (
-                <Button variant="gradient" className="flex-1" asChild>
-                  <Link to="/dashboard">
-                    Create Account <Check className="ml-2 h-4 w-4" />
-                  </Link>
+                <Button variant="gradient" className="flex-1" onClick={handleCreate} disabled={loading}>
+                  {loading ? "Creating…" : "Create Account"}
+                  {!loading && <Check className="ml-2 h-4 w-4" />}
                 </Button>
               )}
             </div>

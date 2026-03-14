@@ -1,50 +1,93 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { AnimatedCounter } from "@/components/shared/AnimatedCounter";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { StaggerContainer, StaggerItem, PageTransition } from "@/components/layout/PageTransition";
+import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
+import { useNavigate } from "react-router-dom";
 import {
-  Eye, EyeOff, Plus, Send, ArrowUpRight, ArrowDownLeft,
-  TrendingUp, TrendingDown, AlertTriangle, DollarSign,
+  Eye, EyeOff, Send, ArrowUpRight, ArrowDownLeft,
+  TrendingUp, AlertTriangle, DollarSign,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from "recharts";
 
-const areaData = [
-  { day: "Mon", amt: 12000 }, { day: "Tue", amt: 18000 }, { day: "Wed", amt: 15000 },
-  { day: "Thu", amt: 25000 }, { day: "Fri", amt: 22000 }, { day: "Sat", amt: 30000 }, { day: "Sun", amt: 28000 },
-];
+interface Counterparty { username: string; full_name?: string; }
+interface TxRecord {
+  _id: string;
+  transaction_type: "DEBIT" | "CREDIT";
+  transaction_amount: number;
+  status: string;
+  description?: string;
+  timestamp: string;
+  is_fraud: boolean;
+  counterparty?: Counterparty;
+}
 
-const pieData = [
-  { name: "Success", value: 85, color: "hsl(160, 84%, 39%)" },
-  { name: "Pending", value: 8, color: "hsl(38, 92%, 50%)" },
-  { name: "Fraud", value: 5, color: "hsl(0, 84%, 60%)" },
-  { name: "Failed", value: 2, color: "hsl(215, 16%, 47%)" },
-];
-
-const transactions = [
-  { id: 1, type: "sent", name: "Priya Sharma", amount: 5000, date: "Today, 2:30 PM", status: "success" as const },
-  { id: 2, type: "received", name: "Rahul Verma", amount: 12500, date: "Today, 11:15 AM", status: "success" as const },
-  { id: 3, type: "sent", name: "Unknown User", amount: 50000, date: "Yesterday, 8:45 PM", status: "fraud" as const },
-  { id: 4, type: "sent", name: "Amit Kumar", amount: 2000, date: "Yesterday, 3:20 PM", status: "pending" as const },
-  { id: 5, type: "received", name: "Neha Singh", amount: 8000, date: "Mar 10, 9:00 AM", status: "success" as const },
-];
+const PIE_COLORS: Record<string, string> = {
+  SUCCESS: "hsl(160, 84%, 39%)",
+  PENDING: "hsl(38, 92%, 50%)",
+  FRAUD:   "hsl(0, 84%, 60%)",
+  FAILED:  "hsl(215, 16%, 47%)",
+};
 
 export default function UserDashboard() {
+  const { user, token, refreshUser } = useAuth();
+  const navigate = useNavigate();
   const [showBalance, setShowBalance] = useState(true);
   const [filter, setFilter] = useState("all");
 
-  const filtered = transactions.filter((t) => {
-    if (filter === "sent") return t.type === "sent";
-    if (filter === "received") return t.type === "received";
-    if (filter === "flagged") return t.status === "fraud";
+  const { data: transactions = [], isLoading } = useQuery<TxRecord[]>({
+    queryKey: ["transactions"],
+    queryFn: () => api.get<TxRecord[]>("/transactions/my", token),
+    enabled: !!token,
+    refetchOnWindowFocus: true,
+  });
+
+  // Refresh user balance whenever transactions load
+  useMemo(() => { if (transactions.length >= 0) refreshUser(); }, [transactions.length]); // eslint-disable-line
+
+  // ── Derived stats ─────────────────────────────────────────────────────────
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const weeklyTxs = transactions.filter((t) => new Date(t.timestamp).getTime() >= weekAgo);
+
+  const income   = weeklyTxs.filter((t) => t.transaction_type === "CREDIT").reduce((s, t) => s + t.transaction_amount, 0);
+  const expenses = weeklyTxs.filter((t) => t.transaction_type === "DEBIT").reduce((s, t) => s + t.transaction_amount, 0);
+  const flagged  = transactions.filter((t) => t.is_fraud).length;
+
+  // 7-day area chart: daily DEBIT spend
+  const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const areaData = DAYS.map((day, idx) => ({
+    day,
+    amt: weeklyTxs
+      .filter((t) => t.transaction_type === "DEBIT" && new Date(t.timestamp).getDay() === idx)
+      .reduce((s, t) => s + t.transaction_amount, 0),
+  }));
+
+  // Pie chart: status distribution
+  const statusCounts: Record<string, number> = {};
+  transactions.forEach((t) => { statusCounts[t.status] = (statusCounts[t.status] ?? 0) + 1; });
+  const pieData = Object.entries(statusCounts).map(([name, value]) => ({
+    name, value, color: PIE_COLORS[name] ?? "hsl(215,16%,47%)",
+  }));
+
+  const filtered = transactions.slice(0, 20).filter((t) => {
+    if (filter === "sent")     return t.transaction_type === "DEBIT";
+    if (filter === "received") return t.transaction_type === "CREDIT";
+    if (filter === "flagged")  return t.is_fraud;
     return true;
   });
+
+  const displayName = (tx: TxRecord) =>
+    tx.counterparty?.full_name || tx.counterparty?.username || "—";
+
+  const balance = user?.balance ?? 0;
 
   return (
     <PageTransition>
@@ -62,24 +105,21 @@ export default function UserDashboard() {
               <div className="flex items-center gap-3">
                 <h2 className="text-3xl sm:text-4xl font-bold">
                   {showBalance ? (
-                    <span>₹<AnimatedCounter value={124580} /></span>
-                  ) : (
-                    "₹ ••••••"
-                  )}
+                    <span>₹<AnimatedCounter value={balance} /></span>
+                  ) : "₹ ••••••"}
                 </h2>
                 <button onClick={() => setShowBalance(!showBalance)} className="text-muted-foreground hover:text-foreground transition-colors">
                   {showBalance ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
-              <p className="text-sm text-success mt-2 flex items-center gap-1">
-                <TrendingUp className="h-3.5 w-3.5" /> +12.5% from last month
-              </p>
+              {income > 0 && (
+                <p className="text-sm text-success mt-2 flex items-center gap-1">
+                  <TrendingUp className="h-3.5 w-3.5" /> +₹{income.toLocaleString()} received this week
+                </p>
+              )}
             </div>
             <div className="flex gap-3">
-              <Button variant="gradient" className="flex-1 sm:flex-none">
-                <Plus className="mr-2 h-4 w-4" /> Add Money
-              </Button>
-              <Button variant="hero-ghost" className="flex-1 sm:flex-none">
+              <Button variant="gradient" className="flex-1 sm:flex-none" onClick={() => navigate("/dashboard/send")}>
                 <Send className="mr-2 h-4 w-4" /> Send Money
               </Button>
             </div>
@@ -89,10 +129,10 @@ export default function UserDashboard() {
         {/* Summary Cards */}
         <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Income (Week)", value: "₹32,500", icon: ArrowDownLeft, color: "text-success", bg: "bg-success/10" },
-            { label: "Expenses (Week)", value: "₹18,200", icon: ArrowUpRight, color: "text-destructive", bg: "bg-destructive/10" },
-            { label: "Transactions", value: "47", icon: DollarSign, color: "text-primary", bg: "bg-primary/10" },
-            { label: "Flagged", value: "3", icon: AlertTriangle, color: "text-warning", bg: "bg-warning/10" },
+            { label: "Income (Week)",    value: `₹${income.toLocaleString()}`,        icon: ArrowDownLeft, color: "text-success",     bg: "bg-success/10" },
+            { label: "Expenses (Week)",  value: `₹${expenses.toLocaleString()}`,      icon: ArrowUpRight,  color: "text-destructive",  bg: "bg-destructive/10" },
+            { label: "Transactions",     value: String(transactions.length),          icon: DollarSign,    color: "text-primary",       bg: "bg-primary/10" },
+            { label: "Flagged",          value: String(flagged),                       icon: AlertTriangle, color: "text-warning",       bg: "bg-warning/10" },
           ].map((c) => (
             <StaggerItem key={c.label}>
               <GlassCard className="flex items-start gap-3">
@@ -111,7 +151,7 @@ export default function UserDashboard() {
         {/* Charts row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <GlassCard className="lg:col-span-2" hover={false}>
-            <h3 className="text-sm font-medium text-muted-foreground mb-4">7-Day Activity</h3>
+            <h3 className="text-sm font-medium text-muted-foreground mb-4">7-Day Spending Activity</h3>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={areaData}>
                 <defs>
@@ -122,7 +162,7 @@ export default function UserDashboard() {
                 </defs>
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "hsl(215, 16%, 47%)", fontSize: 12 }} />
                 <YAxis hide />
-                <Tooltip contentStyle={{ background: "hsl(232, 25%, 14%)", border: "1px solid hsl(232, 20%, 22%)", borderRadius: "8px", color: "#f1f5f9" }} />
+                <Tooltip contentStyle={{ background: "hsl(232, 25%, 14%)", border: "1px solid hsl(232, 20%, 22%)", borderRadius: "8px", color: "#f1f5f9" }} formatter={(v: number) => [`₹${v.toLocaleString()}`, "Amount"]} />
                 <Area type="monotone" dataKey="amt" stroke="hsl(239, 84%, 67%)" fill="url(#areaGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
@@ -130,31 +170,35 @@ export default function UserDashboard() {
 
           <GlassCard hover={false}>
             <h3 className="text-sm font-medium text-muted-foreground mb-4">Status Distribution</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} strokeWidth={0}>
-                  {pieData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
+            {pieData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={160}>
+                  <PieChart>
+                    <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} strokeWidth={0}>
+                      {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: "hsl(232, 25%, 14%)", border: "1px solid hsl(232, 20%, 22%)", borderRadius: "8px", color: "#f1f5f9" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap gap-3 mt-2">
+                  {pieData.map((d) => (
+                    <div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <div className="h-2 w-2 rounded-full" style={{ backgroundColor: d.color }} />
+                      {d.name.charAt(0) + d.name.slice(1).toLowerCase()}
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip contentStyle={{ background: "hsl(232, 25%, 14%)", border: "1px solid hsl(232, 20%, 22%)", borderRadius: "8px", color: "#f1f5f9" }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-wrap gap-3 mt-2">
-              {pieData.map((d) => (
-                <div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: d.color }} />
-                  {d.name}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center mt-8">No transactions yet</p>
+            )}
           </GlassCard>
         </div>
 
         {/* Transaction History */}
         <GlassCard hover={false}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <h3 className="font-semibold">Transaction History</h3>
+            <h3 className="font-semibold">Recent Transactions</h3>
             <div className="flex gap-2">
               {["all", "sent", "received", "flagged"].map((f) => (
                 <button
@@ -168,36 +212,46 @@ export default function UserDashboard() {
             </div>
           </div>
 
-          <div className="space-y-3">
-            {filtered.map((tx) => (
-              <motion.div
-                key={tx.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center justify-between p-3 rounded-lg bg-background/30 hover:bg-background/50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${tx.type === "received" ? "bg-success/10" : "bg-primary/10"}`}>
-                    {tx.type === "received" ? (
-                      <ArrowDownLeft className="h-4 w-4 text-success" />
-                    ) : (
-                      <ArrowUpRight className="h-4 w-4 text-primary" />
-                    )}
+          {isLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-16 rounded-lg bg-background/30 animate-pulse" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No transactions found</p>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((tx) => (
+                <motion.div
+                  key={tx._id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center justify-between p-3 rounded-lg bg-background/30 hover:bg-background/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${tx.transaction_type === "CREDIT" ? "bg-success/10" : "bg-primary/10"}`}>
+                      {tx.transaction_type === "CREDIT"
+                        ? <ArrowDownLeft className="h-4 w-4 text-success" />
+                        : <ArrowUpRight className="h-4 w-4 text-primary" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{displayName(tx)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(tx.timestamp).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{tx.name}</p>
-                    <p className="text-xs text-muted-foreground">{tx.date}</p>
+                  <div className="flex items-center gap-4">
+                    <span className={`text-sm font-semibold ${tx.transaction_type === "CREDIT" ? "text-success" : "text-foreground"}`}>
+                      {tx.transaction_type === "CREDIT" ? "+" : "-"}₹{tx.transaction_amount.toLocaleString()}
+                    </span>
+                    <StatusBadge status={tx.status.toLowerCase() as "success" | "pending" | "fraud" | "failed"} />
                   </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className={`text-sm font-semibold ${tx.type === "received" ? "text-success" : "text-foreground"}`}>
-                    {tx.type === "received" ? "+" : "-"}₹{tx.amount.toLocaleString()}
-                  </span>
-                  <StatusBadge status={tx.status} />
-                </div>
-              </motion.div>
-            ))}
-          </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </GlassCard>
       </div>
     </PageTransition>
