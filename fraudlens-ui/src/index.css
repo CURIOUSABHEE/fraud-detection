@@ -1,0 +1,173 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 230 25% 7%;
+    --foreground: 210 40% 96%;
+
+    --card: 232 25% 14%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 232 25% 14%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 258 90% 66%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 215 16% 47%;
+    --muted-foreground: 215 16% 57%;
+
+    --accent: 258 90% 66%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 0%;
+
+    --border: 232 20% 22%;
+    --input: 232 20% 22%;
+    --ring: 239 84% 67%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 232 25% 10%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 239 84% 67%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 232 25% 18%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 232 20% 22%;
+    --sidebar-ring: 239 84% 67%;
+
+    --glass-bg: 232 25% 14% / 0.6;
+    --glass-border: 232 20% 30% / 0.3;
+    --glow-primary: 239 84% 67%;
+    --glow-accent: 258 90% 66%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(20px);
+    border: 1px solid hsl(var(--glass-border));
+  }
+
+  .glass-card {
+    background: linear-gradient(135deg, hsl(232 25% 16% / 0.8), hsl(232 25% 12% / 0.6));
+    backdrop-filter: blur(20px);
+    border: 1px solid hsl(232 20% 28% / 0.4);
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 30px -5px hsl(239 84% 67% / 0.3);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 30px -5px hsl(258 90% 66% / 0.3);
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(239 84% 67%), hsl(258 90% 66%));
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(239 84% 67%), hsl(258 90% 66%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-border {
+    position: relative;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, hsl(239 84% 67% / 0.5), hsl(258 90% 66% / 0.5));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.08), transparent);
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px -5px hsl(0 84% 60% / 0.3); }
+    50% { box-shadow: 0 0 40px -5px hsl(0 84% 60% / 0.6); }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  @keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient-shift 8s ease infinite;
+  }
+
+  @keyframes count-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
