@@ -878,38 +878,4 @@ console.log('Transaction:', transaction);
 // Use Node.js debugger: node --inspect server/dist/index.js
 ```
 
----
 
-## 📞 Support & Documentation
-
-- **Frontend README**: See `fraudlens-ui/README.md`
-- **Backend Documentation**: See `server/README.md` (if available)
-- **API Documentation**: See [API Endpoints](#api-endpoints) section
-- **Database Schema**: See [Database Architecture](#database-architecture) section
-
----
-
-## 🎯 Roadmap
-
-### Phase 1 (Current)
-- ✅ Core transaction functionality
-- ✅ Basic fraud detection (ML + Graph patterns)
-- ✅ User and admin dashboards
-
-### Phase 2 (Planned)
-- [ ] Two-factor authentication (TOTP)
-- [ ] Advanced ML model training pipeline
-- [ ] Real-time notifications
-- [ ] Mobile app (React Native)
-
-### Phase 3 (Future)
-- [ ] Blockchain integration for immutability
-- [ ] Advanced analytics and reporting
-- [ ] Multi-currency support
-- [ ] API marketplace
-
----
-
-**Last Updated**: January 2024  
-**Project Status**: Active Development  
-**Maintained By**: Development Team
