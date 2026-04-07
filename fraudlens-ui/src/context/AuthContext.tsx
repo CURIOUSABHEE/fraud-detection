@@ -16,6 +16,7 @@ export interface AuthUser {
   gender?: string;
   pan_card?: string;
   balance: number;
+  role?: string;
   latest_login?: string;
   createdAt?: string;
 }
@@ -32,7 +33,7 @@ interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
-  login: (username: string, mpin: string) => Promise<void>;
+  login: (username: string, mpin: string) => Promise<{ user: AuthUser }>;
   signup: (data: SignupData) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -82,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('fl_token', data.token);
     setToken(data.token);
     setUser(data.user);
+    return { user: data.user };
   };
 
   const signup = async (formData: SignupData) => {

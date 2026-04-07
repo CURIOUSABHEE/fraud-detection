@@ -1,75 +1,120 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { AnimatedCounter } from "@/components/shared/AnimatedCounter";
 import { PageTransition, StaggerContainer, StaggerItem } from "@/components/layout/PageTransition";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import {
-  TrendingUp, TrendingDown, Users, AlertTriangle, DollarSign, Download,
+  TrendingUp, TrendingDown, Users, AlertTriangle, DollarSign, Download, Loader2, ArrowUpDown,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
+  PieChart, Pie, Cell,
 } from "recharts";
 
-const barData = [
-  { day: "Mon", normal: 120, fraud: 3 }, { day: "Tue", normal: 180, fraud: 5 },
-  { day: "Wed", normal: 150, fraud: 2 }, { day: "Thu", normal: 250, fraud: 8 },
-  { day: "Fri", normal: 220, fraud: 4 }, { day: "Sat", normal: 300, fraud: 6 },
-  { day: "Sun", normal: 280, fraud: 3 },
-];
+interface AdminStats {
+  totalTransactions: number;
+  fraudCount: number;
+  totalVolume: number;
+  activeUsers: number;
+  barData: { day: string; normal: number; fraud: number }[];
+}
 
-const fraudTypes = [
-  { name: "Velocity", value: 35, color: "hsl(0, 84%, 60%)" },
-  { name: "Geo Anomaly", value: 25, color: "hsl(38, 92%, 50%)" },
-  { name: "Device", value: 20, color: "hsl(239, 84%, 67%)" },
-  { name: "Ring", value: 12, color: "hsl(258, 90%, 66%)" },
-  { name: "Star", value: 8, color: "hsl(160, 84%, 39%)" },
-];
-
-const lineData = [
-  { date: "Mar 1", vol: 1200 }, { date: "Mar 3", vol: 1800 }, { date: "Mar 5", vol: 1500 },
-  { date: "Mar 7", vol: 2500 }, { date: "Mar 9", vol: 2200 }, { date: "Mar 11", vol: 3000 },
-  { date: "Mar 12", vol: 2800 },
-];
-
-const adminTx = [
-  { id: "TX001", sender: "alex_j", receiver: "priya_s", amount: 5000, date: "Mar 12", status: "success" as const, anomalies: [] },
-  { id: "TX002", sender: "unknown_42", receiver: "rahul_v", amount: 50000, date: "Mar 12", status: "fraud" as const, anomalies: ["Velocity", "Geo"] },
-  { id: "TX003", sender: "neha_s", receiver: "amit_k", amount: 2000, date: "Mar 11", status: "pending" as const, anomalies: ["Device"] },
-  { id: "TX004", sender: "ring_node_1", receiver: "ring_node_5", amount: 99000, date: "Mar 11", status: "fraud" as const, anomalies: ["Ring", "Velocity", "Star"] },
-  { id: "TX005", sender: "amit_k", receiver: "neha_s", amount: 8000, date: "Mar 10", status: "success" as const, anomalies: [] },
-];
+interface AdminTx {
+  id: string;
+  sender: string;
+  receiver: string;
+  amount: number;
+  date: string;
+  status: "success" | "fraud" | "failed";
+  is_fraud: boolean;
+}
 
 const chartTooltip = { background: "hsl(232, 25%, 14%)", border: "1px solid hsl(232, 20%, 22%)", borderRadius: "8px", color: "#f1f5f9" };
 
+const fraudTypeColors = [
+  "hsl(0, 84%, 60%)", "hsl(38, 92%, 50%)", "hsl(239, 84%, 67%)",
+  "hsl(258, 90%, 66%)", "hsl(160, 84%, 39%)",
+];
+
 export default function AdminDashboard() {
+  const { token } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [txFilter, setTxFilter] = useState("all");
-  const filteredTx = adminTx.filter((t) => {
-    if (txFilter === "fraud") return t.status === "fraud";
-    if (txFilter === "pending") return t.status === "pending";
-    if (txFilter === "approved") return t.status === "success";
-    return true;
+
+  const { data: stats, isLoading: statsLoading } = useQuery<AdminStats>({
+    queryKey: ["admin-stats"],
+    queryFn: () => api.get<AdminStats>("/admin/stats", token),
   });
+
+  const { data: transactions = [], isLoading: txLoading } = useQuery<AdminTx[]>({
+    queryKey: ["admin-transactions", txFilter],
+    queryFn: () =>
+      api.get<AdminTx[]>(
+        `/admin/transactions?limit=50${txFilter !== "all" ? `&status=${txFilter}` : ""}`,
+        token
+      ),
+  });
+
+  const formatVolume = (v: number) => {
+    if (v >= 1e7) return `₹${(v / 1e7).toFixed(1)}Cr`;
+    if (v >= 1e5) return `₹${(v / 1e5).toFixed(1)}L`;
+    if (v >= 1e3) return `₹${(v / 1e3).toFixed(1)}K`;
+    return `₹${v}`;
+  };
+
+  const fraudRate = stats ? ((stats.fraudCount / Math.max(stats.totalTransactions, 1)) * 100).toFixed(1) : "0";
+
+  const toggleFraudMutation = useMutation({
+    mutationFn: ({ id, is_fraud }: { id: string; is_fraud: boolean }) =>
+      api.patch<{ message: string }>(
+        `/admin/transactions/${id}/fraud`,
+        { is_fraud },
+        token
+      ),
+    onSuccess: (data: any) => {
+      toast({ title: data.message || "Status updated" });
+      queryClient.invalidateQueries({ queryKey: ["admin-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to update", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const fraudPieData = [
+    { name: "Normal", value: (stats?.totalTransactions || 0) - (stats?.fraudCount || 0), color: "hsl(239, 84%, 67%)" },
+    { name: "Fraud", value: stats?.fraudCount || 0, color: "hsl(0, 84%, 60%)" },
+  ];
+
+  if (statsLoading) {
+    return (
+      <PageTransition>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </PageTransition>
+    );
+  }
 
   return (
     <PageTransition>
       <div className="space-y-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Admin Analytics</h1>
-          <Button variant="hero-ghost" size="sm">
-            <Download className="mr-2 h-4 w-4" /> Export CSV
-          </Button>
         </div>
 
         {/* Stat Cards */}
         <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Total Transactions", value: "1,580", icon: DollarSign, trend: "+12%", up: true, color: "text-primary", bg: "bg-primary/10" },
-            { label: "Fraud Detected", value: "31", icon: AlertTriangle, trend: "2.0%", up: true, color: "text-destructive", bg: "bg-destructive/10" },
-            { label: "Total Volume", value: "₹2.4M", icon: TrendingUp, trend: "+18%", up: true, color: "text-success", bg: "bg-success/10" },
-            { label: "Active Users", value: "342", icon: Users, trend: "+5", up: true, color: "text-secondary", bg: "bg-secondary/10" },
+            { label: "Total Transactions", value: stats?.totalTransactions?.toLocaleString() || "0", icon: DollarSign, trend: `${fraudRate}% fraud`, up: false, color: "text-primary", bg: "bg-primary/10" },
+            { label: "Fraud Detected", value: String(stats?.fraudCount || 0), icon: AlertTriangle, trend: `${fraudRate}%`, up: true, color: "text-destructive", bg: "bg-destructive/10" },
+            { label: "Total Volume", value: formatVolume(stats?.totalVolume || 0), icon: TrendingUp, trend: "", up: true, color: "text-success", bg: "bg-success/10" },
+            { label: "Active Users", value: String(stats?.activeUsers || 0), icon: Users, trend: "", up: true, color: "text-secondary", bg: "bg-secondary/10" },
           ].map((c) => (
             <StaggerItem key={c.label}>
               <GlassCard>
@@ -77,10 +122,11 @@ export default function AdminDashboard() {
                   <div className={`h-10 w-10 rounded-xl ${c.bg} flex items-center justify-center`}>
                     <c.icon className={`h-5 w-5 ${c.color}`} />
                   </div>
-                  <span className={`text-xs flex items-center gap-0.5 ${c.up ? "text-success" : "text-destructive"}`}>
-                    {c.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    {c.trend}
-                  </span>
+                  {c.trend && (
+                    <span className={`text-xs flex items-center gap-0.5 ${c.up ? "text-destructive" : "text-muted-foreground"}`}>
+                      {c.trend}
+                    </span>
+                  )}
                 </div>
                 <p className="text-2xl font-bold mt-3">{c.value}</p>
                 <p className="text-xs text-muted-foreground mt-1">{c.label}</p>
@@ -92,9 +138,9 @@ export default function AdminDashboard() {
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <GlassCard hover={false}>
-            <h3 className="text-sm font-medium text-muted-foreground mb-4">Daily Fraud vs Normal</h3>
+            <h3 className="text-sm font-medium text-muted-foreground mb-4">Daily Fraud vs Normal (Last 7 Days)</h3>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={barData}>
+              <BarChart data={stats?.barData || []}>
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "hsl(215,16%,47%)", fontSize: 12 }} />
                 <YAxis hide />
                 <Tooltip contentStyle={chartTooltip} />
@@ -105,45 +151,32 @@ export default function AdminDashboard() {
           </GlassCard>
 
           <GlassCard hover={false}>
-            <h3 className="text-sm font-medium text-muted-foreground mb-4">Fraud Type Distribution</h3>
+            <h3 className="text-sm font-medium text-muted-foreground mb-4">Fraud vs Normal Distribution</h3>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={fraudTypes} dataKey="value" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} strokeWidth={0}>
-                  {fraudTypes.map((e, i) => <Cell key={i} fill={e.color} />)}
+                <Pie data={fraudPieData} dataKey="value" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} strokeWidth={0}>
+                  {fraudPieData.map((e, i) => <Cell key={i} fill={e.color} />)}
                 </Pie>
                 <Tooltip contentStyle={chartTooltip} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap gap-3 mt-2 justify-center">
-              {fraudTypes.map((d) => (
+              {fraudPieData.map((d) => (
                 <div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <div className="h-2 w-2 rounded-full" style={{ backgroundColor: d.color }} />
-                  {d.name} ({d.value}%)
+                  {d.name} ({d.value})
                 </div>
               ))}
             </div>
           </GlassCard>
         </div>
 
-        <GlassCard hover={false}>
-          <h3 className="text-sm font-medium text-muted-foreground mb-4">Transaction Volume Over Time</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={lineData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(232, 20%, 22%)" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "hsl(215,16%,47%)", fontSize: 12 }} />
-              <YAxis hide />
-              <Tooltip contentStyle={chartTooltip} />
-              <Line type="monotone" dataKey="vol" stroke="hsl(258, 90%, 66%)" strokeWidth={2} dot={{ fill: "hsl(258, 90%, 66%)", r: 4 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </GlassCard>
-
         {/* Transactions Table */}
         <GlassCard hover={false}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <h3 className="font-semibold">All Transactions</h3>
             <div className="flex gap-2">
-              {["all", "fraud", "pending", "approved"].map((f) => (
+              {["all", "fraud", "success", "failed"].map((f) => (
                 <button key={f} onClick={() => setTxFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${txFilter === f ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground bg-background/50"}`}>
                   {f.charAt(0).toUpperCase() + f.slice(1)}
                 </button>
@@ -152,34 +185,48 @@ export default function AdminDashboard() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/30">
-                  {["ID", "Sender", "Receiver", "Amount", "Date", "Status", "Anomalies"].map((h) => (
-                    <th key={h} className="text-left py-3 px-3 text-xs text-muted-foreground font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTx.map((tx) => (
-                  <tr key={tx.id} className={`border-b border-border/10 hover:bg-background/30 transition-colors ${tx.status === "fraud" ? "bg-destructive/5" : ""}`}>
-                    <td className="py-3 px-3 font-mono text-xs">{tx.id}</td>
-                    <td className="py-3 px-3">{tx.sender}</td>
-                    <td className="py-3 px-3">{tx.receiver}</td>
-                    <td className="py-3 px-3 font-medium">₹{tx.amount.toLocaleString()}</td>
-                    <td className="py-3 px-3 text-muted-foreground">{tx.date}</td>
-                    <td className="py-3 px-3"><StatusBadge status={tx.status} /></td>
-                    <td className="py-3 px-3">
-                      <div className="flex gap-1 flex-wrap">
-                        {tx.anomalies.map((a) => (
-                          <span key={a} className="px-2 py-0.5 rounded text-xs bg-destructive/10 text-destructive border border-destructive/20">{a}</span>
-                        ))}
-                      </div>
-                    </td>
+            {txLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/30">
+                    {["Sender", "Receiver", "Amount", "Date", "Status", "Action"].map((h) => (
+                      <th key={h} className="text-left py-3 px-3 text-xs text-muted-foreground font-medium">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className={`border-b border-border/10 hover:bg-background/30 transition-colors ${tx.status === "fraud" ? "bg-destructive/5" : ""}`}>
+                      <td className="py-3 px-3">{tx.sender}</td>
+                      <td className="py-3 px-3">{tx.receiver}</td>
+                      <td className="py-3 px-3 font-medium">₹{tx.amount?.toLocaleString()}</td>
+                      <td className="py-3 px-3 text-muted-foreground">{new Date(tx.date).toLocaleDateString()}</td>
+                      <td className="py-3 px-3"><StatusBadge status={tx.status} /></td>
+                      <td className="py-3 px-3">
+                        <button
+                          onClick={() => toggleFraudMutation.mutate({ id: tx.id, is_fraud: !tx.is_fraud })}
+                          disabled={toggleFraudMutation.isPending}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                            tx.is_fraud
+                              ? "bg-success/10 text-success hover:bg-success/20 border border-success/20"
+                              : "bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20"
+                          }`}
+                          title={tx.is_fraud ? "Mark as Normal" : "Mark as Fraud"}
+                        >
+                          <ArrowUpDown className="h-3 w-3" />
+                          {tx.is_fraud ? "Unmark Fraud" : "Mark Fraud"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {transactions.length === 0 && (
+                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No transactions found</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
         </GlassCard>
       </div>

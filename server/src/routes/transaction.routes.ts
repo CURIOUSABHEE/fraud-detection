@@ -13,6 +13,21 @@ import {
 
 const router = Router();
 
+// ─── GET /api/transactions/ ───────────────────────────────────────────────────
+// Returns all DEBIT transactions (used by FastAPI for model retraining)
+router.get('/', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const transactions = await Transaction.find({ transaction_type: 'DEBIT' })
+      .sort({ timestamp: -1 })
+      .limit(5000)
+      .lean();
+    res.json(transactions);
+  } catch (err) {
+    console.error('[Transaction] Fetch all error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // ─── GET /api/transactions/my ─────────────────────────────────────────────────
 router.get('/my', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -169,7 +184,54 @@ router.post(
         detectStarPattern(sender.username),
       ]);
 
-      const is_fraud = velocityAnomaly || ringPattern || starPattern;
+      const neo4jFraud = velocityAnomaly || ringPattern || starPattern;
+
+      // ── ML Model1 fraud prediction (XGBoost + Isolation Forest + SHAP) ──
+      const FASTAPI_URL = process.env.FASTAPI_URL || 'http://127.0.0.1:8000/fastapi';
+
+      interface Model1Result {
+        is_fraud: boolean;
+        fraud_probability: number;
+        most_affected_feature: string;
+        feature_importance: number;
+        is_anomaly: boolean;
+      }
+
+      let mlPrediction: Model1Result | null = null;
+
+      try {
+        const model1Res = await fetch(
+          `${FASTAPI_URL.replace(/\/fastapi\/?$/, '')}/fastapi/model1/predict`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              IP_Address_Flag: ipFlag ? 1 : 0,
+              Previous_Fraudulent_Activity: prevFraud > 0 ? 1 : 0,
+              Daily_Transaction_Count: dailyCount + 1,
+              Failed_Transaction_Count_7d: failed7d,
+              Account_Age: accountAge,
+              Distance_From_Distance_Avg_7d: 0,
+              Is_Weekend: isWeekend ? 1 : 0,
+              IsNight: isNight ? 1 : 0,
+              Time_Since_Last_Transaction: timeSinceLast,
+              Distance_Avg_Transaction_7d: distAvg7d,
+              Transaction_To_Balance_Ratio: txToBalanceRatio,
+            }),
+          }
+        );
+        if (model1Res.ok) {
+          mlPrediction = (await model1Res.json()) as Model1Result;
+        } else {
+          console.error('[ML] Model1 returned status', model1Res.status);
+        }
+      } catch (err) {
+        console.error('[ML] Model1 prediction call failed (non-blocking):', err);
+      }
+
+      // Combine Neo4j + ML results for final fraud decision
+      const mlFraud = mlPrediction ? (mlPrediction.is_fraud || mlPrediction.is_anomaly) : false;
+      const is_fraud = neo4jFraud || mlFraud;
       const status = is_fraud ? 'FRAUD' : 'SUCCESS';
 
       // ── Update balances ──────────────────────────────────────────────────
@@ -252,6 +314,8 @@ router.post(
           is_fraud,
           new_balance: sender.balance,
         },
+        prediction: mlPrediction,
+        neo4j: { velocityAnomaly, ringPattern, starPattern },
       });
     } catch (err) {
       console.error('[Transaction] Send error:', err);

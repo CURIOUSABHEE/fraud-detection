@@ -862,20 +862,4 @@ This project is part of a Mini Project 2026 initiative.
 - Verify XGBoost model is loaded
 - Check transaction data has all required features
 
-### Debug Mode
-
-**Frontend**:
-```typescript
-// In your component
-console.log('Debug:', data);
-// Use React DevTools browser extension
-```
-
-**Backend**:
-```typescript
-// In your route handler
-console.log('Transaction:', transaction);
-// Use Node.js debugger: node --inspect server/dist/index.js
-```
-
 

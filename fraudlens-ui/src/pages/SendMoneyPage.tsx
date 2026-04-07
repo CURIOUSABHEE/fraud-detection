@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Send, MapPin, Globe, AlertCircle, CheckCircle, XCircle, User } from "lucide-react";
+import { Send, MapPin, Globe, AlertCircle, CheckCircle, XCircle, User, Cpu } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -21,6 +21,18 @@ interface SendResult {
     status: string;
     is_fraud: boolean;
     new_balance: number;
+  };
+  prediction?: {
+    is_fraud: boolean;
+    fraud_probability: number;
+    most_affected_feature: string;
+    feature_importance: number;
+    is_anomaly: boolean;
+  };
+  neo4j?: {
+    velocityAnomaly: boolean;
+    ringPattern: boolean;
+    starPattern: boolean;
   };
 }
 
@@ -139,18 +151,94 @@ export default function SendMoneyPage() {
 
         {/* Result banner */}
         {result && (
-          <div className={`p-4 rounded-xl border flex items-start gap-3 ${result.transaction.is_fraud ? "bg-destructive/10 border-destructive/30" : "bg-success/10 border-success/30"}`}>
-            {result.transaction.is_fraud
-              ? <XCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
-              : <CheckCircle className="h-5 w-5 text-success mt-0.5 shrink-0" />}
-            <div>
-              <p className="font-medium text-sm">{result.message}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                ₹{result.transaction.amount.toLocaleString()} → {result.transaction.recipient_name || result.transaction.recipient}
-                {" · "}New balance: ₹{result.transaction.new_balance.toLocaleString()}
-              </p>
+          <div className="space-y-3">
+            <div className={`p-4 rounded-xl border flex items-start gap-3 ${result.transaction.is_fraud ? "bg-destructive/10 border-destructive/30" : "bg-success/10 border-success/30"}`}>
+              {result.transaction.is_fraud
+                ? <XCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                : <CheckCircle className="h-5 w-5 text-success mt-0.5 shrink-0" />}
+              <div>
+                <p className="font-medium text-sm">{result.message}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  ₹{result.transaction.amount.toLocaleString()} → {result.transaction.recipient_name || result.transaction.recipient}
+                  {" · "}New balance: ₹{result.transaction.new_balance.toLocaleString()}
+                </p>
+              </div>
+              <button onClick={() => setResult(null)} className="ml-auto text-muted-foreground hover:text-foreground text-xs">✕</button>
             </div>
-            <button onClick={() => setResult(null)} className="ml-auto text-muted-foreground hover:text-foreground text-xs">✕</button>
+
+            {/* ML Model Prediction + Neo4j Analysis */}
+            {(result.prediction || result.neo4j) && (
+              <div className="p-4 rounded-xl border border-border/30 bg-card/50 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-medium">AI Fraud Analysis</p>
+                </div>
+
+                {result.prediction && (() => {
+                  const pct = result.prediction.fraud_probability * 100;
+                  const textColor = pct > 70 ? "text-destructive" : pct > 30 ? "text-yellow-500" : "text-success";
+                  const barColor = pct > 70 ? "bg-destructive" : pct > 30 ? "bg-yellow-500" : "bg-success";
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Fraud Probability Card */}
+                      <div className="rounded-lg border border-border/30 p-3 bg-background/50">
+                        <p className="text-xs text-muted-foreground">XGBoost Fraud Probability</p>
+                        <div className="flex items-end gap-2 mt-1">
+                          <span className={`text-lg font-bold ${textColor}`}>{pct.toFixed(1)}%</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                            result.prediction!.is_fraud
+                              ? "bg-destructive/10 text-destructive"
+                              : "bg-success/10 text-success"
+                          }`}>
+                            {result.prediction!.is_fraud ? "Fraud" : "Safe"}
+                          </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-border/30 mt-2 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${barColor} transition-all duration-700`}
+                            style={{ width: `${Math.max(pct, 2)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Anomaly Detection Card */}
+                      <div className="rounded-lg border border-border/30 p-3 bg-background/50">
+                        <p className="text-xs text-muted-foreground">Isolation Forest</p>
+                        <div className="flex items-end gap-2 mt-1">
+                          <span className={`text-lg font-bold ${result.prediction!.is_anomaly ? "text-destructive" : "text-success"}`}>
+                            {result.prediction!.is_anomaly ? "Anomaly" : "Normal"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Key feature: <span className="font-medium text-foreground">{result.prediction!.most_affected_feature.replace(/_/g, ' ')}</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          SHAP importance: <span className="font-medium text-foreground">{result.prediction!.feature_importance.toFixed(4)}</span>
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Neo4j Graph Patterns */}
+                {result.neo4j && (
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {([
+                      ['Velocity', result.neo4j.velocityAnomaly],
+                      ['Ring Pattern', result.neo4j.ringPattern],
+                      ['Star Pattern', result.neo4j.starPattern],
+                    ] as [string, boolean][]).map(([label, flagged]) => (
+                      <div key={label} className={`rounded-lg border p-2 text-center text-xs ${
+                        flagged ? "border-destructive/30 bg-destructive/5 text-destructive" : "border-border/30 bg-background/50 text-muted-foreground"
+                      }`}>
+                        <p className="font-medium">{label}</p>
+                        <p className="mt-0.5">{flagged ? "⚠ Detected" : "✓ Clear"}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

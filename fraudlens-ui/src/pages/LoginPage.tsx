@@ -21,8 +21,8 @@ export default function LoginPage() {
     if (mpin.length !== 6) { toast.error("MPIN must be 6 digits"); return; }
     setLoading(true);
     try {
-      await login(username.trim(), mpin);
-      navigate("/dashboard");
+      const { user } = await login(username.trim(), mpin);
+      navigate(user?.role === 'admin' ? '/admin' : '/dashboard');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Login failed");
     } finally {

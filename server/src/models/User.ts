@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema(
     pan_card: { type: String, required: false, trim: true },
     balance: { type: Number, default: 50000 },
     mpin: { type: String, required: true },          // stored as bcrypt hash
+    role: { type: String, enum: ['user', 'admin'], default: 'user' },
     totpSecret: { type: String },
     is2FAEnabled: { type: Boolean, default: false },
     latest_login: { type: Date, required: false },

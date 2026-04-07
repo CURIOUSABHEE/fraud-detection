@@ -68,6 +68,7 @@ router.post(
           gender: user.gender,
           pan_card: user.pan_card,
           balance: user.balance,
+          role: user.role || 'user',
           createdAt: user.createdAt,
         },
       });
@@ -122,6 +123,7 @@ router.post(
           gender: user.gender,
           pan_card: user.pan_card,
           balance: user.balance,
+          role: user.role || 'user',
           latest_login: user.latest_login,
           createdAt: user.createdAt,
         },
