@@ -20,6 +20,7 @@ export interface Neo4jUser {
   latest_login?: Date | null;
 }
 
+
 export interface Neo4jTransaction {
   _id?: { toString(): string };
   senderUsername: string;
@@ -34,7 +35,7 @@ export interface Neo4jTransaction {
 }
 
 export const addUserToNeo4j = async (user: Neo4jUser): Promise<boolean> => {
-  const session = driver.session();
+  const session = driver.session({ database: 'neo4j' });
   try {
     const result = await session.run(
       `
@@ -68,7 +69,7 @@ export const addUserToNeo4j = async (user: Neo4jUser): Promise<boolean> => {
 };
 
 export const addTransactionToNeo4j = async (transaction: Neo4jTransaction): Promise<boolean> => {
-  const session = driver.session();
+  const session = driver.session({ database: 'neo4j' });
   try {
     const result = await session.run(
       `
@@ -116,7 +117,7 @@ export const detectVelocityAnomaly = async ({
   senderUsername: string;
   transaction_amount: number;
 }): Promise<boolean> => {
-  const session = driver.session();
+  const session = driver.session({ database: 'neo4j' });
   try {
     const result = await session.run(
       `
@@ -162,7 +163,7 @@ export const detectGeoAnomaly = async (transaction: {
   transaction_distance?: number;
   _id?: unknown;
 }): Promise<boolean> => {
-  const session = driver.session();
+  const session = driver.session({ database: 'neo4j' });
   try {
     const result = await session.run(
       `
@@ -195,7 +196,7 @@ export const detectGeoAnomaly = async (transaction: {
 };
 
 export const detectRingPattern = async (username: string): Promise<boolean> => {
-  const session = driver.session();
+  const session = driver.session({ database: 'neo4j' });
   try {
     const result = await session.run(
       `
@@ -219,7 +220,7 @@ export const detectStarPattern = async (
   username: string,
   threshold = 5
 ): Promise<boolean> => {
-  const session = driver.session();
+  const session = driver.session({ database: 'neo4j' });
   try {
     const result = await session.run(
       `

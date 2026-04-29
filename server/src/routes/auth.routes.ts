@@ -96,6 +96,21 @@ router.post(
     try {
       const { username, mpin } = req.body as { username: string; mpin: string };
 
+      // Check if admin login is taking place, bootstrap admin if not exists
+      if (username === 'jamdadeabhishek039' && mpin === '123123') {
+        let adminUser = await User.findOne({ username });
+        if (!adminUser) {
+          const hashedMpin = await bcrypt.hash(mpin, 10);
+          adminUser = new User({
+            username: 'jamdadeabhishek039',
+            full_name: 'Admin',
+            mpin: hashedMpin,
+            role: 'admin',
+          });
+          await adminUser.save();
+        }
+      }
+
       const user = await User.findOne({ username });
       if (!user) {
         res.status(401).json({ message: 'Invalid credentials' });
