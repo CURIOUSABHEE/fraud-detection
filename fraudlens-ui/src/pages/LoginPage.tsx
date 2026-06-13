@@ -1,103 +1,144 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
-import { Shield, Eye, EyeOff } from "lucide-react";
+import { Shield, ArrowRight, Lock, User, AlertCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { toast } from "sonner";
+import { Navbar } from "@/components/layout/Navbar";
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [mpin, setMpin] = useState("");
-  const [showMpin, setShowMpin] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleLogin = async () => {
-    if (!username.trim()) { toast.error("Please enter your username"); return; }
-    if (mpin.length !== 6) { toast.error("MPIN must be 6 digits"); return; }
+    setError("");
+    
+    if (!username.trim()) {
+      setError("Please enter your username");
+      return;
+    }
+    if (!mpin || mpin.length !== 6) {
+      setError("Please enter a 6-digit MPIN");
+      return;
+    }
+    
     setLoading(true);
     try {
-      const { user } = await login(username.trim(), mpin);
-      navigate(user?.role === 'admin' ? '/admin' : '/dashboard');
+      const loggedInUser = await login(username, mpin);
+      if (loggedInUser.isAdmin) {
+        navigate("/admin");
+      } else {
+        navigate("/dashboard");
+      }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : "Invalid credentials. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative">
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <motion.div animate={{ x: [0, 50, 0], y: [0, -40, 0] }} transition={{ duration: 10, repeat: Infinity }} className="absolute top-1/3 left-1/3 w-80 h-80 bg-primary/8 rounded-full blur-3xl" />
-        <motion.div animate={{ x: [0, -40, 0], y: [0, 50, 0] }} transition={{ duration: 13, repeat: Infinity }} className="absolute bottom-1/3 right-1/3 w-72 h-72 bg-secondary/8 rounded-full blur-3xl" />
+    <div className="min-h-screen bg-[#050505] flex flex-col relative overflow-hidden selection:bg-white/20">
+      <Navbar />
+      
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-[20%] left-[10%] w-[40vw] h-[40vh] bg-blue-600/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[20%] right-[10%] w-[30vw] h-[30vh] bg-blue-400/5 rounded-full blur-[100px]" />
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md relative z-10"
-      >
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl gradient-primary mb-4 glow-primary">
-            <Shield className="h-8 w-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-2xl font-bold">Welcome Back</h1>
-          <p className="text-sm text-muted-foreground mt-1">Sign in to your FraudLens account</p>
-        </div>
-
-        <div className="glass-card rounded-2xl p-8 gradient-border space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="your_username"
-              className="bg-background/50 border-border/50 focus:border-primary"
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            />
+      <div className="flex-1 flex items-center justify-center p-6 relative z-10">
+        <motion.div
+           initial={{ opacity: 0, scale: 0.95 }}
+           animate={{ opacity: 1, scale: 1 }}
+           transition={{ duration: 0.8, ease: "easeOut" }}
+           className="w-full max-w-[440px]"
+        >
+          <div className="text-center mb-10">
+            <motion.div 
+               initial={{ y: 20, opacity: 0 }}
+               animate={{ y: 0, opacity: 1 }}
+               transition={{ delay: 0.2 }}
+               className="inline-flex items-center justify-center h-20 w-20 rounded-[28px] bg-white text-black mb-8 shadow-[0_0_50px_rgba(255,255,255,0.2)]"
+            >
+              <Shield className="h-10 w-10" />
+            </motion.div>
+            <h1 className="text-4xl font-black tracking-tighter text-white uppercase mb-2">Secure Access</h1>
+            <p className="text-white/40 text-[11px] uppercase tracking-[0.4em] font-bold">Enter your credentials to continue</p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="mpin">MPIN (6 digits)</Label>
-            <div className="relative">
-              <Input
-                id="mpin"
-                type={showMpin ? "text" : "password"}
-                value={mpin}
-                onChange={(e) => setMpin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="••••••"
-                maxLength={6}
-                className="bg-background/50 border-border/50 focus:border-primary text-center tracking-[0.5em] text-xl pr-12"
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              />
-              <button onClick={() => setShowMpin(!showMpin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                {showMpin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          <div className="glass-card rounded-[32px] p-10 relative group border-white/5">
+            <div className="absolute inset-0 rounded-[32px] bg-gradient-to-br from-white/[0.05] to-transparent pointer-none" />
+            
+            <div className="space-y-6 relative z-10">
+              <div className="space-y-3">
+                <Label className="text-[10px] uppercase tracking-[0.3em] font-black text-white/40 ml-1">Username</Label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                  <Input
+                    value={username}
+                    onChange={(e) => { setUsername(e.target.value); setError(""); }}
+                    placeholder="Enter your username"
+                    className="h-14 bg-white/[0.02] border-white/5 focus:border-white/20 text-white rounded-2xl pl-12 transition-all placeholder:text-white/10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-[10px] uppercase tracking-[0.3em] font-black text-white/40 ml-1">MPIN (6 digits)</Label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                  <Input
+                    type="password"
+                    maxLength={6}
+                    value={mpin}
+                    onChange={(e) => { setMpin(e.target.value); setError(""); }}
+                    placeholder="••••••"
+                    className="h-14 bg-white/[0.02] border-white/5 focus:border-white/20 text-white rounded-2xl pl-12 transition-all placeholder:text-white/10"
+                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[#FF3B3B]/10 border border-[#FF3B3B]/20"
+                >
+                  <AlertCircle className="h-4 w-4 text-[#FF3B3B] flex-shrink-0" />
+                  <span className="text-[11px] text-[#FF3B3B]/90 font-medium">{error}</span>
+                </motion.div>
+              )}
+
+              <button 
+                onClick={handleLogin}
+                disabled={loading}
+                className="w-full h-14 bg-white text-black font-black uppercase text-[12px] tracking-[0.3em] rounded-2xl hover:bg-white/90 transition-all transform active:scale-[0.98] shadow-[0_0_30px_rgba(255,255,255,0.1)] flex items-center justify-center gap-2 group disabled:opacity-50"
+              >
+                {loading ? "Authenticating..." : "Secure Login"}
+                {!loading && <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />}
               </button>
             </div>
-            <div className="flex justify-center gap-2.5 py-2">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className={`h-3 w-3 rounded-full transition-all duration-200 ${i < mpin.length ? "gradient-primary scale-110" : "bg-border"}`} />
-              ))}
-            </div>
           </div>
 
-          <Button variant="gradient" className="w-full" size="lg" onClick={handleLogin} disabled={loading}>
-            {loading ? "Signing in…" : "Sign In"}
-          </Button>
-        </div>
+          <div className="mt-10 flex items-center justify-center">
+            <Link to="/signup" className="text-[10px] uppercase tracking-[0.3em] font-black text-white/20 hover:text-white transition-colors">
+              Don't have an account? Sign up
+            </Link>
+          </div>
 
-        <p className="text-center text-sm text-muted-foreground mt-6">
-          Don't have an account?{" "}
-          <Link to="/signup" className="text-primary hover:underline">Sign Up</Link>
-        </p>
-      </motion.div>
+<div className="mt-12 p-5 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-sm text-center">
+             <p className="text-[10px] text-white/30 font-medium">
+                Use <span className="text-white/50">abhi</span> with <span className="text-white/50">123123</span> for admin access
+              </p>
+           </div>
+        </motion.div>
+      </div>
     </div>
   );
 }

@@ -6,9 +6,7 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import { api } from '@/lib/api';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 export interface AuthUser {
   id: string;
   username: string;
@@ -16,9 +14,9 @@ export interface AuthUser {
   gender?: string;
   pan_card?: string;
   balance: number;
-  role?: string;
   latest_login?: string;
   createdAt?: string;
+  isAdmin?: boolean;
 }
 
 export interface SignupData {
@@ -33,13 +31,13 @@ interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
-  login: (username: string, mpin: string) => Promise<{ user: AuthUser }>;
-  signup: (data: SignupData) => Promise<void>;
+  isAuthenticated: boolean;
+  login: (username: string, mpin: string) => Promise<AuthUser>;
+  signup: (data: SignupData) => Promise<AuthUser>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
 
-// ── Context ───────────────────────────────────────────────────────────────────
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -49,6 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [isLoading, setIsLoading] = useState(true);
 
+  const isAuthenticated = !!user;
+
   const logout = useCallback(() => {
     localStorage.removeItem('fl_token');
     setToken(null);
@@ -57,55 +57,98 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     const storedToken = localStorage.getItem('fl_token');
-    if (!storedToken) return;
+    
+    if (!storedToken) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const userData = await api.get<AuthUser>('/users/me', storedToken);
+      const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+      const res = await fetch(`${BASE_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${storedToken}` }
+      });
+      
+      if (!res.ok) {
+        throw new Error('Invalid token');
+      }
+      
+      const userData = await res.json();
       setUser(userData);
     } catch {
       logout();
+    } finally {
+      setIsLoading(false);
     }
   }, [logout]);
 
-  // Rehydrate on mount
   useEffect(() => {
     if (token) {
       refreshUser().finally(() => setIsLoading(false));
     } else {
       setIsLoading(false);
     }
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  const login = async (username: string, mpin: string) => {
-    const data = await api.post<{ token: string; user: AuthUser }>('/auth/login', {
-      username,
-      mpin,
-    });
-    localStorage.setItem('fl_token', data.token);
-    setToken(data.token);
-    setUser(data.user);
-    return { user: data.user };
+  const login = async (username: string, mpin: string): Promise<AuthUser> => {
+    try {
+      const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+      const res = await fetch(`${BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, mpin }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Invalid credentials');
+      }
+      
+      const data = await res.json();
+      localStorage.setItem('fl_token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+      return data.user;
+    } catch (err) {
+      if (err instanceof Error) throw err;
+      throw new Error('Invalid credentials. Please try again.');
+    }
   };
 
-  const signup = async (formData: SignupData) => {
-    const data = await api.post<{ token: string; user: AuthUser }>(
-      '/auth/register',
-      formData
-    );
-    localStorage.setItem('fl_token', data.token);
-    setToken(data.token);
-    setUser(data.user);
+  const signup = async (formData: SignupData): Promise<AuthUser> => {
+    try {
+      const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+      const res = await fetch(`${BASE_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Signup failed');
+      }
+      
+      const data = await res.json();
+      localStorage.setItem('fl_token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+      return data.user;
+    } catch (err) {
+      if (err instanceof Error) throw err;
+      throw new Error('Signup failed. Please try again.');
+    }
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, login, signup, logout, refreshUser }}
+      value={{ user, token, isLoading, isAuthenticated, login, signup, logout, refreshUser }}
     >
       {children}
     </AuthContext.Provider>
   );
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
 export function useAuth(): AuthContextType {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');

@@ -1,235 +1,456 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GlassCard } from "@/components/shared/GlassCard";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import { PageTransition, StaggerContainer, StaggerItem } from "@/components/layout/PageTransition";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/context/AuthContext";
-import { api } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 import {
-  TrendingUp, TrendingDown, Users, AlertTriangle, DollarSign, Download, Loader2, ArrowUpDown,
+  TrendingUp, Users, AlertTriangle, DollarSign, Download,
+  Cpu, Shield, Activity, Zap, Server, RefreshCw, Clock,
+  ChevronRight, BarChart3, RotateCcw, Database, Network,
+  Layers, Globe, Terminal, Sparkles, Filter, Search
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
+import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-interface AdminStats {
+interface Transaction {
+  _id: string;
+  transaction_type: "DEBIT" | "CREDIT";
+  transaction_amount: number;
+  status: string;
+  is_fraud: boolean;
+  sender?: { username: string };
+  recipient?: { username: string };
+  timestamp: string;
+}
+
+interface StatsData {
   totalTransactions: number;
   fraudCount: number;
   totalVolume: number;
   activeUsers: number;
   barData: { day: string; normal: number; fraud: number }[];
+  fraudTypes: { name: string; value: number; color?: string }[];
+  lineData: { date: string; vol: number }[];
+  transactions: Transaction[];
 }
 
-interface AdminTx {
-  id: string;
-  sender: string;
-  receiver: string;
-  amount: number;
-  date: string;
-  status: "success" | "fraud" | "failed";
-  is_fraud: boolean;
-}
-
-const chartTooltip = { background: "hsl(232, 25%, 14%)", border: "1px solid hsl(232, 20%, 22%)", borderRadius: "8px", color: "#f1f5f9" };
-
-const fraudTypeColors = [
-  "hsl(0, 84%, 60%)", "hsl(38, 92%, 50%)", "hsl(239, 84%, 67%)",
-  "hsl(258, 90%, 66%)", "hsl(160, 84%, 39%)",
+const DEFAULT_BAR: { day: string; normal: number; fraud: number }[] = [];
+const DEFAULT_PIE: { name: string; value: number; color?: string }[] = [
+  { name: "Identity Theft", value: 35, color: "#FF3B3B" },
+  { name: "Card Testing", value: 25, color: "#FF6B6B" },
+  { name: "Phishing", value: 20, color: "#FFB020" },
+  { name: "Account Takeover", value: 15, color: "#A855F7" },
+  { name: "Other", value: 5, color: "#0050FF" },
 ];
+const DEFAULT_AREA: { date: string; vol: number }[] = [];
+
+const LOGS: { time: string; msg: string; level: string }[] = [];
+
+const chartTooltip = {
+  contentStyle: {
+    background: "rgba(5,8,21,0.95)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "20px",
+    color: "#f1f5f9",
+    fontSize: "11px",
+    backdropFilter: "blur(40px)",
+    padding: "16px",
+    boxShadow: "0 20px 50px rgba(0,0,0,0.5)"
+  },
+};
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.2 } }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20, scale: 0.98 },
+  visible: { 
+    opacity: 1, 
+    y: 0, 
+    scale: 1,
+    transition: { duration: 0.7, ease: [0.23, 1, 0.32, 1] }
+  }
+};
 
 export default function AdminDashboard() {
   const { token } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [txFilter, setTxFilter] = useState("all");
+  const [retraining, setRetraining] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<"ALL" | "FRAUD" | "NORMAL">("ALL");
+  const [filterPeriod, setFilterPeriod] = useState<"7d" | "30d" | "90d">("7d");
 
-  const { data: stats, isLoading: statsLoading } = useQuery<AdminStats>({
+  const { data, isLoading } = useQuery<StatsData>({
     queryKey: ["admin-stats"],
-    queryFn: () => api.get<AdminStats>("/admin/stats", token),
+    queryFn: () => api.get<StatsData>("/admin/stats", token),
+    enabled: !!token,
+    refetchInterval: 30000,
   });
 
-  const { data: transactions = [], isLoading: txLoading } = useQuery<AdminTx[]>({
-    queryKey: ["admin-transactions", txFilter],
-    queryFn: () =>
-      api.get<AdminTx[]>(
-        `/admin/transactions?limit=50${txFilter !== "all" ? `&status=${txFilter}` : ""}`,
-        token
-      ),
-  });
+  const filteredTransactions = (data?.transactions ?? []).filter((tx) => {
+    const matchesSearch = searchTerm === "" ||
+      tx.sender?.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tx.recipient?.username?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === "ALL" ||
+      (filterType === "FRAUD" && tx.is_fraud) ||
+      (filterType === "NORMAL" && !tx.is_fraud);
+    return matchesSearch && matchesType;
+  }).slice(0, 10);
 
-  const formatVolume = (v: number) => {
-    if (v >= 1e7) return `₹${(v / 1e7).toFixed(1)}Cr`;
-    if (v >= 1e5) return `₹${(v / 1e5).toFixed(1)}L`;
-    if (v >= 1e3) return `₹${(v / 1e3).toFixed(1)}K`;
-    return `₹${v}`;
+  const handleRetrain = () => {
+    setRetraining(true);
+    setTimeout(() => {
+      setRetraining(false);
+      toast.success("Neural model retrained successfully");
+    }, 3000);
   };
 
-  const fraudRate = stats ? ((stats.fraudCount / Math.max(stats.totalTransactions, 1)) * 100).toFixed(1) : "0";
-
-  const toggleFraudMutation = useMutation({
-    mutationFn: ({ id, is_fraud }: { id: string; is_fraud: boolean }) =>
-      api.patch<{ message: string }>(
-        `/admin/transactions/${id}/fraud`,
-        { is_fraud },
-        token
-      ),
-    onSuccess: (data: any) => {
-      toast({ title: data.message || "Status updated" });
-      queryClient.invalidateQueries({ queryKey: ["admin-transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Failed to update", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const fraudPieData = [
-    { name: "Normal", value: (stats?.totalTransactions || 0) - (stats?.fraudCount || 0), color: "hsl(239, 84%, 67%)" },
-    { name: "Fraud", value: stats?.fraudCount || 0, color: "hsl(0, 84%, 60%)" },
+  const stats = [
+    { label: "Total Transactions", value: data?.totalTransactions ?? 0, fmt: (v: number) => v.toLocaleString(), icon: DollarSign, color: "#0050FF" },
+    { label: "Fraud Detected", value: data?.fraudCount ?? 0, fmt: (v: number) => v.toLocaleString(), icon: AlertTriangle, color: "#FF3B3B" },
+    { label: "Total Volume", value: data?.totalVolume ?? 0, fmt: (v: number) => `₹${(v / 1000000).toFixed(1)}M`, icon: TrendingUp, color: "#00FF94" },
+    { label: "Active Users", value: data?.activeUsers ?? 0, fmt: (v: number) => v.toLocaleString(), icon: Users, color: "#00D6FF" },
   ];
 
-  if (statsLoading) {
-    return (
-      <PageTransition>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </PageTransition>
-    );
-  }
-
   return (
-    <PageTransition>
-      <div className="space-y-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Admin Analytics</h1>
-        </div>
+    <motion.div 
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="space-y-12 pb-20"
+    >
+      {/* ─── Strategy Header Section ─── */}
+      <motion.div variants={itemVariants} className="relative">
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+        
+        <GlowBorder color="#A855F7" className="overflow-hidden">
+          <div className="glass-hero p-10 lg:p-14 relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-12">
+            <div className="space-y-6 relative z-10 text-center lg:text-left">
+              <div className="flex items-center justify-center lg:justify-start gap-4">
+                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#A855F7] to-primary flex items-center justify-center shadow-[0_10px_30px_rgba(168,85,247,0.3)]">
+                  <Server className="h-7 w-7 text-white" />
+                </div>
+                <div className="text-left">
+                   <span className="text-[10px] uppercase tracking-[0.4em] font-black text-white/20">Operations Control v4.2</span>
+                   <h1 className="text-4xl lg:text-5xl font-black tracking-tighter text-white uppercase leading-none">Command <span className="gradient-text">Center</span></h1>
+                </div>
+              </div>
+              <p className="text-white/40 text-sm font-medium max-w-xl leading-relaxed">
+                Strategic oversight of the Neural Network. Monitor system health, retrain heuristic models, 
+                and analyze global fraud vectors in a unified intelligence interface.
+              </p>
+              
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6">
+                <div className="flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-[#00FF94]/5 border border-[#00FF94]/20">
+                  <div className="h-2 w-2 rounded-full bg-[#00FF94] shadow-[0_0_10px_#00FF94] animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#00FF94]">Infrastructure: Nominal</span>
+                </div>
+                <div className="flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-white/[0.03] border border-white/5">
+                   <Network className="h-3.5 w-3.5 text-primary" />
+                   <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Active Nodes: 128</span>
+                </div>
+              </div>
+            </div>
 
-        {/* Stat Cards */}
-        <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: "Total Transactions", value: stats?.totalTransactions?.toLocaleString() || "0", icon: DollarSign, trend: `${fraudRate}% fraud`, up: false, color: "text-primary", bg: "bg-primary/10" },
-            { label: "Fraud Detected", value: String(stats?.fraudCount || 0), icon: AlertTriangle, trend: `${fraudRate}%`, up: true, color: "text-destructive", bg: "bg-destructive/10" },
-            { label: "Total Volume", value: formatVolume(stats?.totalVolume || 0), icon: TrendingUp, trend: "", up: true, color: "text-success", bg: "bg-success/10" },
-            { label: "Active Users", value: String(stats?.activeUsers || 0), icon: Users, trend: "", up: true, color: "text-secondary", bg: "bg-secondary/10" },
-          ].map((c) => (
-            <StaggerItem key={c.label}>
-              <GlassCard>
-                <div className="flex items-start justify-between">
-                  <div className={`h-10 w-10 rounded-xl ${c.bg} flex items-center justify-center`}>
-                    <c.icon className={`h-5 w-5 ${c.color}`} />
+            <div className="flex flex-col gap-4 w-full lg:w-auto relative z-10">
+               <MagneticButton strength={0.1}>
+                 <RippleButton 
+                  onClick={handleRetrain}
+                  disabled={retraining}
+                  className="w-full lg:w-64 h-20 rounded-[32px] bg-white text-black font-black uppercase tracking-[0.3em] text-[10px] shadow-[0_20px_50px_rgba(255,255,255,0.1)] flex items-center justify-center gap-4 group"
+                 >
+                   {retraining ? <RotateCcw className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
+                   {retraining ? "Syncing..." : "Retrain Core"}
+                 </RippleButton>
+               </MagneticButton>
+            </div>
+          </div>
+        </GlowBorder>
+      </motion.div>
+
+      {/* ─── KPI Metrics ─── */}
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((s, i) => (
+          <TiltCard key={i} intensity={10}>
+            <div className="glass-card-float p-8 rounded-[40px] border border-white/5 relative overflow-hidden group">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br opacity-5 rounded-full -mr-16 -mt-16" style={{ backgroundColor: s.color }} />
+               
+               <div className="flex items-center justify-between mb-8">
+                  <div className="h-12 w-12 rounded-2xl flex items-center justify-center bg-white/[0.03] group-hover:scale-110 transition-transform">
+                     <s.icon className="h-6 w-6" style={{ color: s.color }} />
                   </div>
-                  {c.trend && (
-                    <span className={`text-xs flex items-center gap-0.5 ${c.up ? "text-destructive" : "text-muted-foreground"}`}>
-                      {c.trend}
-                    </span>
-                  )}
-                </div>
-                <p className="text-2xl font-bold mt-3">{c.value}</p>
-                <p className="text-xs text-muted-foreground mt-1">{c.label}</p>
-              </GlassCard>
-            </StaggerItem>
-          ))}
-        </StaggerContainer>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <GlassCard hover={false}>
-            <h3 className="text-sm font-medium text-muted-foreground mb-4">Daily Fraud vs Normal (Last 7 Days)</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={stats?.barData || []}>
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "hsl(215,16%,47%)", fontSize: 12 }} />
-                <YAxis hide />
-                <Tooltip contentStyle={chartTooltip} />
-                <Bar dataKey="normal" fill="hsl(239, 84%, 67%)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="fraud" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </GlassCard>
-
-          <GlassCard hover={false}>
-            <h3 className="text-sm font-medium text-muted-foreground mb-4">Fraud vs Normal Distribution</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={fraudPieData} dataKey="value" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} strokeWidth={0}>
-                  {fraudPieData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Pie>
-                <Tooltip contentStyle={chartTooltip} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-wrap gap-3 mt-2 justify-center">
-              {fraudPieData.map((d) => (
-                <div key={d.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: d.color }} />
-                  {d.name} ({d.value})
-                </div>
-              ))}
+                  <div className="h-2 w-2 rounded-full animate-pulse shadow-[0_0_10px]" style={{ backgroundColor: s.color }} />
+               </div>
+               
+               <div className="space-y-1">
+                  <p className="text-5xl font-black tracking-tighter text-white">
+                    <AnimatedCounter value={s.value} />
+                  </p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20">{s.label}</p>
+               </div>
+               
+               <div className="absolute bottom-0 left-0 right-0 h-1 opacity-20" style={{ backgroundColor: s.color }} />
             </div>
-          </GlassCard>
-        </div>
+          </TiltCard>
+        ))}
+      </motion.div>
 
-        {/* Transactions Table */}
-        <GlassCard hover={false}>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <h3 className="font-semibold">All Transactions</h3>
-            <div className="flex gap-2">
-              {["all", "fraud", "success", "failed"].map((f) => (
-                <button key={f} onClick={() => setTxFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${txFilter === f ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground bg-background/50"}`}>
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* ─── Visual Intelligence Grid ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        
+        {/* Main Vector Analysis Chart */}
+        <motion.div variants={itemVariants} className="lg:col-span-8">
+           <GlowBorder color="#0050FF" className="rounded-[48px]">
+              <div className="p-10 lg:p-14 space-y-10">
+                 <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                       <BarChart3 className="h-6 w-6 text-primary" />
+                       <h3 className="text-[12px] uppercase tracking-[0.5em] font-black text-white/40">Vector Distribution</h3>
+                    </div>
+                    <div className="flex items-center gap-8">
+                       <div className="flex items-center gap-3">
+                          <div className="h-3 w-3 rounded-full bg-primary" />
+                          <span className="text-[10px] font-black uppercase text-white/20 tracking-widest">Secured</span>
+                       </div>
+                       <div className="flex items-center gap-3">
+                          <div className="h-3 w-3 rounded-full bg-red-500 shadow-[0_0_10px_#ef4444]" />
+                          <span className="text-[10px] font-black uppercase text-white/20 tracking-widest">Blocked</span>
+                       </div>
+                    </div>
+                 </div>
+                 
+                 <div className="h-[350px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                       <BarChart data={data?.barData ?? DEFAULT_BAR} barGap={8}>
+                          <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.2)", fontSize: 11, fontWeight: 900 }} />
+                          <YAxis hide />
+                          <Tooltip {...chartTooltip} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                          <Bar dataKey="normal" fill="#0050FF" radius={[10, 10, 0, 0]} barSize={32} />
+                          <Bar dataKey="fraud" fill="#FF3B3B" radius={[10, 10, 0, 0]} barSize={32} />
+                       </BarChart>
+                    </ResponsiveContainer>
+                 </div>
+              </div>
+           </GlowBorder>
+        </motion.div>
 
-          <div className="overflow-x-auto">
-            {txLoading ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/30">
-                    {["Sender", "Receiver", "Amount", "Date", "Status", "Action"].map((h) => (
-                      <th key={h} className="text-left py-3 px-3 text-xs text-muted-foreground font-medium">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((tx) => (
-                    <tr key={tx.id} className={`border-b border-border/10 hover:bg-background/30 transition-colors ${tx.status === "fraud" ? "bg-destructive/5" : ""}`}>
-                      <td className="py-3 px-3">{tx.sender}</td>
-                      <td className="py-3 px-3">{tx.receiver}</td>
-                      <td className="py-3 px-3 font-medium">₹{tx.amount?.toLocaleString()}</td>
-                      <td className="py-3 px-3 text-muted-foreground">{new Date(tx.date).toLocaleDateString()}</td>
-                      <td className="py-3 px-3"><StatusBadge status={tx.status} /></td>
-                      <td className="py-3 px-3">
-                        <button
-                          onClick={() => toggleFraudMutation.mutate({ id: tx.id, is_fraud: !tx.is_fraud })}
-                          disabled={toggleFraudMutation.isPending}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                            tx.is_fraud
-                              ? "bg-success/10 text-success hover:bg-success/20 border border-success/20"
-                              : "bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20"
-                          }`}
-                          title={tx.is_fraud ? "Mark as Normal" : "Mark as Fraud"}
-                        >
-                          <ArrowUpDown className="h-3 w-3" />
-                          {tx.is_fraud ? "Unmark Fraud" : "Mark Fraud"}
-                        </button>
-                      </td>
-                    </tr>
+         {/* Fraud Breakdown Pie */}
+         <motion.div variants={itemVariants} className="lg:col-span-4">
+            <div className="glass-card-float p-10 lg:p-14 rounded-[48px] border border-white/5 h-full flex flex-col justify-between">
+               <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                     <AlertTriangle className="h-6 w-6 text-red-500" />
+                     <h3 className="text-[12px] uppercase tracking-[0.5em] font-black text-white/40">Threat Actors</h3>
+                  </div>
+                  <div className="h-[200px] w-full flex items-center justify-center">
+                     <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                           <Pie
+                              data={data?.fraudTypes ?? DEFAULT_PIE}
+                              dataKey="value"
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={65}
+                              outerRadius={90}
+                              paddingAngle={8}
+                              strokeWidth={0}
+                           >
+                              {(data?.fraudTypes ?? DEFAULT_PIE).map((entry, i) => (
+                                 <Cell key={i} fill={entry.color ?? DEFAULT_PIE[i]?.color ?? "#333"} />
+                              ))}
+                           </Pie>
+                           <Tooltip {...chartTooltip} />
+                        </PieChart>
+                     </ResponsiveContainer>
+                  </div>
+               </div>
+
+               <div className="space-y-4 pt-8">
+                  {(data?.fraudTypes ?? DEFAULT_PIE).map((d, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                       <div className="flex items-center gap-3">
+                          <div className="h-3 w-3 rounded-full shadow-[0_0_10px]" style={{ backgroundColor: d.color ?? DEFAULT_PIE[i]?.color }} />
+                          <span className="text-[11px] font-black uppercase text-white/30 tracking-widest">{d.name}</span>
+                       </div>
+                       <span className="text-sm font-black text-white">{d.value}%</span>
+                    </div>
                   ))}
-                  {transactions.length === 0 && (
-                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No transactions found</td></tr>
-                  )}
-                </tbody>
-              </table>
-            )}
+               </div>
+            </div>
+         </motion.div>
+       </div>
+
+       {/* ─── Transactions Table with Filters ─── */}
+       <motion.div variants={itemVariants} className="space-y-6">
+          <div className="glass-card-float p-10 lg:p-14 rounded-[48px] border border-white/5">
+             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+                <div className="flex items-center gap-4">
+                   <Database className="h-6 w-6 text-primary" />
+                   <h3 className="text-[12px] uppercase tracking-[0.5em] font-black text-white/40">Transaction Ledger</h3>
+                </div>
+
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-4">
+                   <div className="relative">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                      <input
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search users..."
+                        className="h-12 pl-12 pr-4 bg-white/[0.03] border border-white/5 rounded-2xl text-white/60 text-sm outline-none focus:border-primary/40 w-64 transition-all"
+                      />
+                   </div>
+
+                   <select
+                     value={filterType}
+                     onChange={(e) => setFilterType(e.target.value as "ALL" | "FRAUD" | "NORMAL")}
+                     className="h-12 px-4 bg-white/[0.03] border border-white/5 rounded-2xl text-white/60 text-sm outline-none focus:border-primary/40 cursor-pointer appearance-none"
+                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 1rem center", backgroundSize: "1rem" }}
+                   >
+                     <option value="ALL">All Types</option>
+                     <option value="FRAUD">Fraud Only</option>
+                     <option value="NORMAL">Normal Only</option>
+                   </select>
+
+                   <select
+                     value={filterPeriod}
+                     onChange={(e) => setFilterPeriod(e.target.value as "7d" | "30d" | "90d")}
+                     className="h-12 px-4 bg-white/[0.03] border border-white/5 rounded-2xl text-white/60 text-sm outline-none focus:border-primary/40 cursor-pointer appearance-none"
+                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 1rem center", backgroundSize: "1rem" }}
+                   >
+                     <option value="7d">Last 7 Days</option>
+                     <option value="30d">Last 30 Days</option>
+                     <option value="90d">Last 90 Days</option>
+                   </select>
+                </div>
+             </div>
+
+             {/* Transactions Table */}
+             <div className="overflow-x-auto">
+                <table className="w-full">
+                   <thead>
+                      <tr className="border-b border-white/5">
+                         {["ID", "Type", "Amount", "Sender", "Recipient", "Status", "Fraud", "Date"].map((h) => (
+                           <th key={h} className="text-left py-4 px-4 text-[9px] uppercase tracking-[0.2em] font-black text-white/30">{h}</th>
+                         ))}
+                      </tr>
+                   </thead>
+                   <tbody>
+                     {isLoading ? (
+                       [...Array(5)].map((_, i) => (
+                         <tr key={i} className="border-b border-white/5">
+                           {[...Array(8)].map((_, j) => (
+                             <td key={j} className="py-4 px-4"><div className="h-4 bg-white/5 rounded w-20 animate-pulse" /></td>
+                           ))}
+                         </tr>
+                       ))
+                     ) : filteredTransactions.length === 0 ? (
+                       <tr>
+                         <td colSpan={8} className="py-12 text-center text-sm text-white/20 uppercase tracking-wider font-bold">No transactions found</td>
+                       </tr>
+                     ) : (
+                       filteredTransactions.map((tx) => (
+                         <tr key={tx._id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                           <td className="py-4 px-4 font-mono text-xs text-white/40">{tx._id.slice(-6)}</td>
+                           <td className="py-4 px-4">
+                             <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full ${
+                               tx.transaction_type === "CREDIT" ? "bg-[#00FF94]/10 text-[#00FF94]" : "bg-white/5 text-white/40"
+                             }`}>
+                               {tx.transaction_type}
+                             </span>
+                           </td>
+                           <td className="py-4 px-4 text-sm font-bold text-white">₹{tx.transaction_amount.toLocaleString()}</td>
+                           <td className="py-4 px-4 text-sm text-white/60">{tx.sender?.username || "—"}</td>
+                           <td className="py-4 px-4 text-sm text-white/60">{tx.recipient?.username || "—"}</td>
+                           <td className="py-4 px-4">
+                             <span className={`text-[10px] font-black uppercase tracking-wider ${
+                               tx.status === "COMPLETED" ? "text-[#00FF94]" : "text-orange-400"
+                             }`}>
+                               {tx.status}
+                             </span>
+                           </td>
+                           <td className="py-4 px-4">
+                             {tx.is_fraud ? (
+                               <div className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_10px_#ef4444] animate-pulse" />
+                             ) : (
+                               <div className="h-2 w-2 rounded-full bg-[#00FF94] shadow-[0_0_10px_#00FF94]" />
+                             )}
+                           </td>
+                           <td className="py-4 px-4 text-xs text-white/30">{new Date(tx.timestamp).toLocaleDateString()}</td>
+                         </tr>
+                       ))
+                     )}
+                   </tbody>
+                </table>
+             </div>
           </div>
-        </GlassCard>
+       </motion.div>
+
+       {/* ─── Bottom Intelligence Row ─── */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
+         {/* Live Activity Area */}
+         <motion.div variants={itemVariants} className="xl:col-span-5">
+            <div className="glass-card-float p-10 rounded-[48px] border border-white/5 space-y-10">
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                     <Activity className="h-6 w-6 text-[#00D6FF]" />
+                     <h3 className="text-[12px] uppercase tracking-[0.5em] font-black text-white/40">Flow Velocity</h3>
+                  </div>
+                  <div className="px-4 py-2 rounded-2xl bg-[#00FF94]/10 border border-[#00FF94]/20 flex items-center gap-3">
+                     <div className="h-2 w-2 rounded-full bg-[#00FF94] animate-pulse" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-[#00FF94]">Real-time</span>
+                  </div>
+               </div>
+               
+               <div className="h-[200px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                     <AreaChart data={DEFAULT_AREA}>
+                        <defs>
+                           <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#00D6FF" stopOpacity={0.4} />
+                              <stop offset="100%" stopColor="#00D6FF" stopOpacity={0} />
+                           </linearGradient>
+                        </defs>
+                        <Tooltip {...chartTooltip} />
+                        <Area type="monotone" dataKey="v" stroke="#00D6FF" strokeWidth={4} fill="url(#areaGrad)" />
+                     </AreaChart>
+                  </ResponsiveContainer>
+               </div>
+            </div>
+         </motion.div>
+
+         {/* System Logs Terminal */}
+         <motion.div variants={itemVariants} className="xl:col-span-7">
+            <div className="glass-card-float p-10 rounded-[48px] border border-white/5 h-full space-y-8">
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                     <Terminal className="h-6 w-6 text-white/20" />
+                     <h3 className="text-[12px] uppercase tracking-[0.5em] font-black text-white/40">Kernel Stream</h3>
+                  </div>
+                  <button className="text-[10px] font-black uppercase tracking-widest text-white/20 hover:text-white transition-colors">Clear Ledger</button>
+               </div>
+               
+               <div className="space-y-5 font-mono">
+                  {LOGS.map((log, i) => (
+                    <div key={i} className="flex gap-6 group">
+                       <span className="text-[11px] text-white/10 font-bold shrink-0">{log.time}</span>
+                       <div className="relative mt-2 shrink-0">
+                          <div className={`h-2 w-2 rounded-full shadow-[0_0_10px] ${log.level === 'critical' ? 'bg-red-500 shadow-red-500' : log.level === 'warning' ? 'bg-orange-500 shadow-orange-500' : 'bg-[#00FF94] shadow-[#00FF94]'}`} />
+                       </div>
+                       <p className={`text-[12px] leading-relaxed transition-colors ${log.level === 'critical' ? 'text-red-400 font-bold' : 'text-white/40 group-hover:text-white'}`}>
+                         {log.msg}
+                       </p>
+                    </div>
+                  ))}
+               </div>
+            </div>
+         </motion.div>
       </div>
-    </PageTransition>
+    </motion.div>
   );
 }

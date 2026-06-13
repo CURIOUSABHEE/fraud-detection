@@ -1,213 +1,163 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
-import { Shield, ArrowRight, ArrowLeft, Check, User, Lock } from "lucide-react";
+import { Shield, ArrowRight, User, Lock, CheckCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { toast } from "sonner";
-
-const stepVariants = {
-  enter: (dir: number) => ({ x: dir > 0 ? 200 : -200, opacity: 0 }),
-  center: { x: 0, opacity: 1 },
-  exit: (dir: number) => ({ x: dir > 0 ? -200 : 200, opacity: 0 }),
-};
 
 export default function SignupPage() {
   const { signup } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
-  const [dir, setDir] = useState(1);
+  const [step, setStep] = useState<"form" | "success">("form");
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: "", gender: "male", pan: "", username: "", mpin: "", confirmMpin: "" });
+  const [form, setForm] = useState({ name: "", username: "", mpin: "" });
 
   const update = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const next = () => {
-    if (step === 1) {
-      if (!form.username.trim()) { toast.error("Username is required"); return; }
-      if (form.mpin.length !== 6) { toast.error("MPIN must be 6 digits"); return; }
-      if (form.mpin !== form.confirmMpin) { toast.error("MPINs do not match"); return; }
-    }
-    setDir(1); setStep((s) => Math.min(2, s + 1));
-  };
-  const back = () => { setDir(-1); setStep((s) => Math.max(0, s - 1)); };
-
-  const handleCreate = async () => {
+  const handleSignup = async () => {
+    if (!form.name.trim()) return;
+    if (!form.username.trim()) return;
+    if (form.mpin.length !== 6) return;
+    
     setLoading(true);
     try {
       await signup({
         username: form.username.trim(),
-        full_name: form.name.trim() || undefined,
-        gender: form.gender as "male" | "female" | "other",
-        pan_card: form.pan.trim() || undefined,
+        full_name: form.name.trim(),
         mpin: form.mpin,
       });
-      navigate("/dashboard");
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Registration failed");
+      setStep("success");
+      setTimeout(() => navigate("/dashboard"), 2000);
+    } catch {
+      setStep("form");
     } finally {
       setLoading(false);
     }
   };
 
-  const stepIcons = [User, Lock, Check];
-
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Animated BG */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <motion.div animate={{ x: [0, 40, 0], y: [0, -30, 0] }} transition={{ duration: 12, repeat: Infinity }} className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/8 rounded-full blur-3xl" />
-        <motion.div animate={{ x: [0, -30, 0], y: [0, 40, 0] }} transition={{ duration: 15, repeat: Infinity }} className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-secondary/8 rounded-full blur-3xl" />
+    <div className="min-h-screen bg-[#050505] flex flex-col relative overflow-hidden selection:bg-white/20">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-[15%] right-[15%] w-[35vw] h-[35vh] bg-[#0050FF]/8 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[20%] left-[10%] w-[25vw] h-[25vh] bg-[#00D6FF]/5 rounded-full blur-[100px]" />
       </div>
 
-      {/* Left illustration (hidden on mobile) */}
-      <div className="hidden lg:flex flex-1 items-center justify-center relative z-10 p-12">
-        <div className="text-center max-w-md">
-          <Shield className="h-20 w-20 text-primary mx-auto mb-8" />
-          <h2 className="text-3xl font-bold mb-4">Join <span className="gradient-text">FraudLens</span></h2>
-          <p className="text-muted-foreground">Start protecting your transactions with AI-powered fraud detection today.</p>
-        </div>
-      </div>
-
-      {/* Form */}
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-8 relative z-10">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8 lg:hidden">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <Shield className="h-8 w-8 text-primary" />
-              <span className="text-xl font-bold gradient-text">FraudLens</span>
-            </div>
+      <div className="flex-1 flex items-center justify-center p-6 relative z-10">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8 }}
+          className="w-full max-w-[440px]"
+        >
+          <div className="text-center mb-10">
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="inline-flex items-center justify-center h-20 w-20 rounded-[28px] bg-white text-black mb-8 shadow-[0_0_50px_rgba(255,255,255,0.2)]"
+            >
+              <Shield className="h-10 w-10" />
+            </motion.div>
+            {step === "form" ? (
+              <>
+                <h1 className="text-4xl font-black tracking-tighter text-white uppercase mb-2">Create Account</h1>
+                <p className="text-white/40 text-[11px] uppercase tracking-[0.4em] font-bold">Join the FraudLens Network</p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-4xl font-black tracking-tighter text-white uppercase mb-2">Welcome Aboard</h1>
+                <p className="text-white/40 text-[11px] uppercase tracking-[0.4em] font-bold">Redirecting to Dashboard...</p>
+              </>
+            )}
           </div>
 
-          {/* Step indicator */}
-          <div className="flex items-center justify-center gap-4 mb-8">
-            {["Personal", "Security", "Confirm"].map((label, i) => {
-              const Icon = stepIcons[i];
-              return (
-                <div key={label} className="flex items-center gap-2">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${i <= step ? "gradient-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground"}`}>
-                    {i < step ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+          <div className="glass-card rounded-[32px] p-10 relative border-white/5">
+            <div className="absolute inset-0 rounded-[32px] bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none" />
+
+            {step === "form" ? (
+              <div className="space-y-6 relative z-10">
+                <div className="space-y-3">
+                  <Label className="text-[10px] uppercase tracking-[0.3em] font-black text-white/40 ml-1">Full Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                    <Input 
+                      value={form.name} 
+                      onChange={(e) => update("name", e.target.value)} 
+                      placeholder="John Smith" 
+                      className="h-14 bg-white/[0.02] border-white/5 focus:border-white/20 text-white rounded-2xl pl-12 placeholder:text-white/10" 
+                    />
                   </div>
-                  <span className={`text-xs hidden sm:block ${i <= step ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
-                  {i < 2 && <div className={`w-8 h-px ${i < step ? "bg-primary" : "bg-border"}`} />}
                 </div>
-              );
-            })}
-          </div>
 
-          <div className="glass-card rounded-2xl p-8 gradient-border">
-            <AnimatePresence mode="wait" custom={dir}>
+                <div className="space-y-3">
+                  <Label className="text-[10px] uppercase tracking-[0.3em] font-black text-white/40 ml-1">Username</Label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                    <Input 
+                      value={form.username} 
+                      onChange={(e) => update("username", e.target.value)} 
+                      placeholder="Choose a username" 
+                      className="h-14 bg-white/[0.02] border-white/5 focus:border-white/20 text-white rounded-2xl pl-12 placeholder:text-white/10" 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-[10px] uppercase tracking-[0.3em] font-black text-white/40 ml-1">MPIN (6 digits)</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                    <Input 
+                      type="password"
+                      maxLength={6}
+                      value={form.mpin} 
+                      onChange={(e) => update("mpin", e.target.value)} 
+                      placeholder="Enter 6-digit MPIN" 
+                      className="h-14 bg-white/[0.02] border-white/5 focus:border-white/20 text-white rounded-2xl pl-12 placeholder:text-white/10" 
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleSignup}
+                  disabled={loading}
+                  className="w-full h-14 bg-white text-black font-black uppercase text-[12px] tracking-[0.3em] rounded-2xl hover:bg-white/90 transition-all active:scale-[0.98] shadow-[0_0_30px_rgba(255,255,255,0.1)] flex items-center justify-center gap-2 group disabled:opacity-50"
+                >
+                  {loading ? "Creating..." : "Create Account"}
+                  {!loading && <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />}
+                </button>
+              </div>
+            ) : (
               <motion.div
-                key={step}
-                custom={dir}
-                variants={stepVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.3, ease: "easeInOut" }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="space-y-6 relative z-10 text-center py-4"
               >
-                {step === 0 && (
-                  <div className="space-y-5">
-                    <h3 className="text-xl font-semibold mb-1">Personal Information</h3>
-                    <p className="text-sm text-muted-foreground mb-4">Tell us about yourself</p>
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Full Name</Label>
-                      <Input id="name" value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="Enter your full name" className="bg-background/50 border-border/50 focus:border-primary" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Gender</Label>
-                      <div className="flex gap-3">
-                        {["male", "female", "other"].map((g) => (
-                          <button key={g} onClick={() => update("gender", g)} className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${form.gender === g ? "gradient-primary text-primary-foreground" : "bg-background/50 border border-border/50 text-muted-foreground hover:border-primary/50"}`}>
-                            {g.charAt(0).toUpperCase() + g.slice(1)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="pan">PAN Card</Label>
-                      <Input id="pan" value={form.pan} onChange={(e) => update("pan", e.target.value.toUpperCase())} placeholder="AAAAA0000A" maxLength={10} className="bg-background/50 border-border/50 focus:border-primary uppercase tracking-wider" />
-                    </div>
-                  </div>
-                )}
-
-                {step === 1 && (
-                  <div className="space-y-5">
-                    <h3 className="text-xl font-semibold mb-1">Account Security</h3>
-                    <p className="text-sm text-muted-foreground mb-4">Set up your credentials</p>
-                    <div className="space-y-2">
-                      <Label htmlFor="username">Username / Email</Label>
-                      <Input id="username" value={form.username} onChange={(e) => update("username", e.target.value)} placeholder="your@email.com" className="bg-background/50 border-border/50 focus:border-primary" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="mpin">Create MPIN (6 digits)</Label>
-                      <Input id="mpin" type="password" value={form.mpin} onChange={(e) => update("mpin", e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="••••••" maxLength={6} className="bg-background/50 border-border/50 focus:border-primary text-center tracking-[0.5em] text-xl" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmMpin">Confirm MPIN</Label>
-                      <Input id="confirmMpin" type="password" value={form.confirmMpin} onChange={(e) => update("confirmMpin", e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="••••••" maxLength={6} className="bg-background/50 border-border/50 focus:border-primary text-center tracking-[0.5em] text-xl" />
-                    </div>
-                    {form.mpin.length === 6 && (
-                      <div className="h-1.5 rounded-full bg-background overflow-hidden">
-                        <div className="h-full rounded-full gradient-primary transition-all" style={{ width: form.mpin === form.confirmMpin && form.confirmMpin.length === 6 ? "100%" : "50%" }} />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {step === 2 && (
-                  <div className="space-y-5">
-                    <h3 className="text-xl font-semibold mb-1">Review & Confirm</h3>
-                    <p className="text-sm text-muted-foreground mb-4">Verify your details</p>
-                    <div className="space-y-3 p-4 rounded-lg bg-background/30 border border-border/30">
-                      {[
-                        ["Full Name", form.name || "—"],
-                        ["Gender", form.gender.charAt(0).toUpperCase() + form.gender.slice(1)],
-                        ["PAN Card", form.pan || "—"],
-                        ["Username", form.username || "—"],
-                        ["MPIN", "••••••"],
-                      ].map(([k, v]) => (
-                        <div key={k} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{k}</span>
-                          <span className="font-medium">{v}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded border-border" />
-                      <span className="text-muted-foreground">I agree to the Terms of Service</span>
-                    </label>
-                  </div>
-                )}
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", damping: 15 }}
+                  className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-white/10 mb-4"
+                >
+                  <CheckCircle className="h-10 w-10 text-white" />
+                </motion.div>
+                <p className="text-white/60 text-sm">Account created successfully!</p>
               </motion.div>
-            </AnimatePresence>
-
-            <div className="flex gap-3 mt-8">
-              {step > 0 && (
-                <Button variant="outline" onClick={back} className="flex-1">
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
-                </Button>
-              )}
-              {step < 2 ? (
-                <Button variant="gradient" onClick={next} className="flex-1">
-                  Next <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              ) : (
-                <Button variant="gradient" className="flex-1" onClick={handleCreate} disabled={loading}>
-                  {loading ? "Creating…" : "Create Account"}
-                  {!loading && <Check className="ml-2 h-4 w-4" />}
-                </Button>
-              )}
-            </div>
+            )}
           </div>
 
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            Already have an account?{" "}
-            <Link to="/login" className="text-primary hover:underline">Log In</Link>
-          </p>
-        </div>
+          <div className="mt-10 text-center">
+            <Link to="/login" className="text-[10px] uppercase tracking-[0.3em] font-black text-white/20 hover:text-white transition-colors">
+              Already have an account? Log in
+            </Link>
+          </div>
+
+          <div className="mt-8 p-4 rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur-sm text-center">
+            <p className="text-[10px] text-white/25 font-medium">
+              This is a demo. Any credentials will work for testing.
+            </p>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

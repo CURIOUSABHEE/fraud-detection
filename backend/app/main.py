@@ -44,4 +44,4 @@ app.get("/fastapi", tags=["Status"])(index)
 app.get("/fastapi/graph")(test_neo4j_connection)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="localhost", port=8000, reload=True)
+    uvicorn.run("main:app", host="localhost", port=8001, reload=True)
