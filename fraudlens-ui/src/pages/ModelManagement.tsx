@@ -96,14 +96,14 @@ export default function ModelManagement() {
     >
       {/* Header with Tabs */}
       <motion.div variants={itemVariants} className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0050FF]/10 via-[#A855F7]/5 to-[#00D6FF]/10 rounded-[32px] blur-3xl" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0050FF]/10 via-[#00D6FF]/5 to-[#00D6FF]/10 rounded-[32px] blur-3xl" />
 
         <div className="glass-hero rounded-[32px] p-10 relative overflow-hidden">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
             <div className="flex items-center gap-5">
               <motion.div
                 whileHover={{ scale: 1.05, rotate: 5 }}
-                className="h-16 w-16 rounded-3xl bg-gradient-to-br from-[#A855F7] to-[#0050FF] flex items-center justify-center shadow-[0_0_60px_rgba(168,85,247,0.3)]"
+                className="h-16 w-16 rounded-3xl bg-gradient-to-br from-[#0050FF] to-[#00D6FF] flex items-center justify-center shadow-[0_0_60px_rgba(0,80,255,0.3)]"
               >
                 <Cpu className="h-8 w-8 text-white" />
               </motion.div>
@@ -125,7 +125,7 @@ export default function ModelManagement() {
                   <TabsTrigger
                     key={tab.value}
                     value={tab.value}
-                    className="data-[state=active]:bg-[#A855F7]/10 data-[state=active]:border-[#A855F7]/20 data-[state=active]:text-[#A855F7] border border-transparent rounded-xl px-6 py-3 text-white/30 hover:text-white/50 transition-all"
+                    className="data-[state=active]:bg-[#0050FF]/10 data-[state=active]:border-[#0050FF]/20 data-[state=active]:text-[#0050FF] border border-transparent rounded-xl px-6 py-3 text-white/30 hover:text-white/50 transition-all"
                   >
                     <tab.icon className="h-4 w-4 mr-2" />
                     <span className="text-[10px] uppercase tracking-[0.2em] font-black">{tab.label}</span>
@@ -272,8 +272,8 @@ export default function ModelManagement() {
           {/* Retrain Model */}
           <motion.div variants={itemVariants} className="glass-card-float rounded-[28px] p-8 border border-white/5">
             <div className="flex items-center gap-4 mb-8">
-              <div className="h-10 w-10 rounded-xl bg-[#A855F7]/10 border border-[#A855F7]/20 flex items-center justify-center">
-                <RefreshCw className="h-5 w-5 text-[#A855F7]" />
+              <div className="h-10 w-10 rounded-xl bg-[#00D6FF]/10 border border-[#00D6FF]/20 flex items-center justify-center">
+                <RefreshCw className="h-5 w-5 text-[#00D6FF]" />
               </div>
               <div>
                 <h2 className="text-lg font-black text-white uppercase tracking-tight">Retrain Model</h2>
@@ -325,7 +325,7 @@ export default function ModelManagement() {
                   whileTap={{ scale: 0.98 }}
                   onClick={() => retrainMutation.mutate()}
                   disabled={retrainMutation.isPending || models.length === 0}
-                  className="w-full h-14 bg-gradient-to-r from-[#A855F7] to-[#0050FF] text-white font-black uppercase text-[11px] tracking-[0.2em] rounded-2xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-[0_0_40px_rgba(168,85,247,0.3)]"
+                  className="w-full h-14 bg-gradient-to-r from-[#0050FF] to-[#00D6FF] text-white font-black uppercase text-[11px] tracking-[0.2em] rounded-2xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-[0_0_40px_rgba(0,80,255,0.3)]"
                 >
                   {retrainMutation.isPending ? (
                     <><RefreshCw className="h-5 w-5 animate-spin" /> Training...</>
@@ -345,7 +345,7 @@ export default function ModelManagement() {
                     </div>
                     <div className="h-3 rounded-full bg-white/5 overflow-hidden">
                       <motion.div
-                        className="h-full rounded-full bg-gradient-to-r from-[#A855F7] to-[#0050FF]"
+                        className="h-full rounded-full bg-gradient-to-r from-[#0050FF] to-[#00D6FF]"
                         animate={{ width: ["40%", "70%", "90%"] }}
                         transition={{ duration: 2, repeat: Infinity }}
                       />

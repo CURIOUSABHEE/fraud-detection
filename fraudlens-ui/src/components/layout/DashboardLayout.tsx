@@ -15,15 +15,15 @@ export default function DashboardLayout() {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-[#07070b] text-white relative overflow-hidden font-sans">
+      <div className="flex min-h-screen w-full bg-[#050505] text-white relative overflow-hidden font-sans">
         
         {/* ─── Premium Background ─── */}
         <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
           {/* Aurora Mesh Background */}
-          <div className="absolute inset-0 bg-[#07070b]" />
+          <div className="absolute inset-0 bg-[#050505]" />
           <div className="absolute top-[-50%] left-[-20%] w-[90vw] h-[90vw] bg-primary/[0.04] rounded-full blur-[150px] animate-orb-float" />
           <div className="absolute bottom-[-30%] right-[-20%] w-[70vw] h-[70vw] bg-[#00D6FF]/[0.03] rounded-full blur-[130px] animate-orb-float" style={{ animationDelay: "-7s" }} />
-          <div className="absolute top-[30%] right-[10%] w-[50vw] h-[50vw] bg-[#A855F7]/[0.025] rounded-full blur-[140px] animate-orb-float" style={{ animationDelay: "-14s" }} />
+          <div className="absolute top-[30%] right-[10%] w-[50vw] h-[50vw] bg-[#00D6FF]/[0.02] rounded-full blur-[140px] animate-orb-float" style={{ animationDelay: "-14s" }} />
           
           {/* Subtle Grid */}
           <div 
@@ -45,7 +45,7 @@ export default function DashboardLayout() {
               className="h-16 flex items-center justify-between px-6 relative sticky top-0 z-40"
             >
               {/* Glass Background */}
-              <div className="absolute inset-0 bg-[#07070b]/70 backdrop-blur-2xl border-b border-white/[0.05]" />
+              <div className="absolute inset-0 bg-[#050505]/70 backdrop-blur-2xl border-b border-white/[0.05]" />
               
               {/* Top Glow */}
               <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/15 to-transparent" />

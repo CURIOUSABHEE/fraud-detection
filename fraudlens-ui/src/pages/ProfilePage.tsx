@@ -79,7 +79,7 @@ export default function ProfilePage() {
             
             <div className="relative z-10">
                <motion.div whileHover={{ scale: 1.05 }} className="relative group">
-                  <div className="h-40 w-40 rounded-[48px] bg-gradient-to-br from-primary via-[#00D6FF] to-[#A855F7] flex items-center justify-center text-6xl font-black text-white shadow-[0_20px_50px_rgba(0,80,255,0.3)] group-hover:shadow-[0_20px_80px_rgba(0,128,255,0.5)] transition-all duration-500">
+                  <div className="h-40 w-40 rounded-[48px] bg-gradient-to-br from-primary to-[#00D6FF] flex items-center justify-center text-6xl font-black text-white shadow-[0_20px_50px_rgba(0,80,255,0.3)] group-hover:shadow-[0_20px_80px_rgba(0,128,255,0.5)] transition-all duration-500">
                     {initial}
                   </div>
                   <div className="absolute -bottom-2 -right-2 h-12 w-12 rounded-2xl bg-[#00FF94] border-8 border-[#020202] flex items-center justify-center">

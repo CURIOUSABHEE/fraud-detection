@@ -45,7 +45,7 @@ const itemVariants = {
 const MetricCard = ({ label, value, sub, icon: Icon, color, delay = 0, suffix = "" }: { label: string; value: string | number; sub: string; icon: React.ElementType; color: string; delay?: number; suffix?: string }) => (
   <motion.div variants={itemVariants}>
     <TiltCard intensity={10} className="h-full">
-      <GlowBorder color={color} className="h-full">
+      <GlowBorder color="#0050FF" className="h-full">
         <div className="p-7 relative z-10 flex flex-col justify-between h-full">
           <div className="flex items-center justify-between mb-6">
             <div className={`h-12 w-12 rounded-2xl flex items-center justify-center bg-white/[0.03] border border-white/5`}>

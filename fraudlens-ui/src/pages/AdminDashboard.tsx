@@ -128,11 +128,11 @@ export default function AdminDashboard() {
       <motion.div variants={itemVariants} className="relative">
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
         
-        <GlowBorder color="#A855F7" className="overflow-hidden">
+        <GlowBorder color="#0050FF" className="overflow-hidden">
           <div className="glass-hero p-10 lg:p-14 relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-12">
             <div className="space-y-6 relative z-10 text-center lg:text-left">
               <div className="flex items-center justify-center lg:justify-start gap-4">
-                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#A855F7] to-primary flex items-center justify-center shadow-[0_10px_30px_rgba(168,85,247,0.3)]">
+                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-[#0050FF] to-[#00D6FF] flex items-center justify-center shadow-[0_10px_30px_rgba(0,80,255,0.3)]">
                   <Server className="h-7 w-7 text-white" />
                 </div>
                 <div className="text-left">

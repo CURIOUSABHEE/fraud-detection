@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = async (formData: SignupData): Promise<AuthUser> => {
     try {
       const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
-      const res = await fetch(`${BASE_URL}/auth/signup`, {
+      const res = await fetch(`${BASE_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),

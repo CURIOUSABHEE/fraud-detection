@@ -46,7 +46,7 @@ export function AppSidebar() {
   return (
     <Sidebar 
       collapsible="icon" 
-      className="border-r border-white/[0.05] bg-[#0a0a0f]/80 backdrop-blur-2xl relative z-50 fixed left-0 top-0 h-screen shadow-[0_0_60px_rgba(0,80,255,0.03)]"
+      className="border-r border-white/[0.05] bg-[#050505]/80 backdrop-blur-2xl relative z-50 fixed left-0 top-0 h-screen shadow-[0_0_60px_rgba(0,80,255,0.03)]"
     >
       {/* ─── Glass Effect Overlay ─── */}
       <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.03] via-transparent to-transparent pointer-events-none" />

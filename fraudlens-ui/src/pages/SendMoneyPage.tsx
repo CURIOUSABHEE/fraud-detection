@@ -373,9 +373,9 @@ export default function SendMoneyPage() {
 
               <div className="space-y-6">
                 {[
-                  { label: "Origin Node", val: geoInfo.label, icon: MapPin, col: "#00FF94" },
+                  { label: "Origin Node", val: geoInfo.label, icon: MapPin, col: "#0050FF" },
                   { label: "IP Protocol", val: "L7 Encrypted", icon: Shield, col: "#00D6FF" },
-                  { label: "Settlement Tier", val: "Alpha-7 (Immediate)", icon: Activity, col: "#A855F7" }
+                  { label: "Settlement Tier", val: "Alpha-7 (Immediate)", icon: Activity, col: "#0050FF" }
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-5 p-5 rounded-3xl bg-white/[0.02] border border-white/5">
                      <item.icon className="h-5 w-5" style={{ color: item.col }} />
